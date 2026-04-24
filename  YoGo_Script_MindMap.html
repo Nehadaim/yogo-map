@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<!--
+=======================================================================
+  YoGo — Скрипт продажи  v2.0
+  Звонок после пробного занятия: квалификация → презентация → закрытие
+=======================================================================
+  ИНТЕГРАЦИЯ БИТРИКС24:
+  1. Разместите HTML на доступном хосте (HTTPS)
+  2. Локальное приложение → Placement: CRM_CONTACT_DETAIL_TAB
+  3. Данные студентки: BX24.placement.getInterface()
+  4. Запись результата: crm.activity.add / crm.deal.update
+=======================================================================
+-->
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YoGo · Скрипт продажи</title>
+<style>
+  :root {
+    --bg: #F7F5FA;
+    --surface: #FFFFFF;
+    --border: #E3D9F0;
+    --text: #18102B;
+    --muted: #7B6E90;
+    --purple: #6E3FB5;
+    --purple-mid: #8B5FCC;
+    --purple-light: #EDE5F8;
+    --orange: #E84E1B;
+    --orange-light: #FEF1EC;
+    --teal: #2E8877;
+    --teal-light: #E5F4F1;
+    --cream: #FEF8EE;
+    --cream-border: #ECD8A8;
+    --amber: #B8963A;
+    --dark-purple: #2C1A4E;
+    --radius: 10px;
+    --mono: 'Courier New', 'Lucida Console', monospace;
+    --shadow: 0 2px 16px rgba(110,63,181,0.08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 14px;
+    line-height: 1.65;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: radial-gradient(circle, #C0A8E0 1px, transparent 1px);
+    background-size: 30px 30px;
+    opacity: 0.14;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    background: linear-gradient(135deg, var(--dark-purple) 0%, var(--purple) 100%);
+    color: white;
+    padding: 18px 20px 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 24px rgba(44,26,78,0.35);
+    overflow: hidden;
+  }
+  .header::before {
+    content: '';
+    position: absolute;
+    top: -20px; right: -10px;
+    width: 100px; height: 160px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 160'%3E%3Cpath d='M50 150 C25 120 8 85 18 45 C26 18 46 5 66 18 C86 30 88 62 74 90 C60 118 50 150 50 150Z' fill='rgba(255,255,255,0.06)'/%3E%3Cpath d='M50 150 L52 60' stroke='rgba(255,255,255,0.08)' stroke-width='1.5' fill='none'/%3E%3Cpath d='M52 90 C38 80 30 65 35 52' stroke='rgba(255,255,255,0.06)' stroke-width='1' fill='none'/%3E%3Cpath d='M52 110 C66 100 72 85 68 72' stroke='rgba(255,255,255,0.06)' stroke-width='1' fill='none'/%3E%3C/svg%3E") no-repeat center;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .header-inner { position: relative; z-index: 1; }
+  .header-top { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+  .yogo-logo {
+    background: #FFFFFF; color: #000000;
+    border-radius: 5px; padding: 4px 12px;
+    font-weight: 900; font-size: 14px; letter-spacing: 1.5px;
+    font-family: var(--mono); flex-shrink: 0;
+  }
+  .header-slash { color: rgba(255,255,255,0.4); font-family: var(--mono); font-size: 11px; }
+  .header-badge {
+    background: rgba(232,78,27,0.22);
+    border: 1px solid rgba(232,78,27,0.35);
+    color: #FFD4C8; font-size: 11px; padding: 3px 10px;
+    border-radius: 20px; font-family: var(--mono);
+    font-weight: 700; letter-spacing: 0.5px;
+  }
+  .header-title { font-size: 14px; font-weight: 400; opacity: 0.85; margin-bottom: 14px; line-height: 1.4; }
+  .header-title strong { font-weight: 700; }
+  .tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab-btn {
+    background: rgba(255,255,255,0.1);
+    border: none; border-radius: 7px 7px 0 0;
+    color: rgba(255,255,255,0.65);
+    padding: 8px 16px; font-size: 11px; font-weight: 600;
+    cursor: pointer; white-space: nowrap; transition: all .2s;
+    font-family: var(--mono); letter-spacing: 0.5px;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .tab-btn:hover { background: rgba(255,255,255,0.18); color: white; }
+  .tab-btn.active { background: var(--bg); color: var(--purple); box-shadow: 0 -2px 0 var(--orange) inset; }
+  .tab-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ── MAIN ── */
+  .main { padding: 24px 20px 60px; max-width: 880px; position: relative; z-index: 1; }
+  .page { display: none; }
+  .page.active { display: block; }
+  .page-title { font-size: 18px; font-weight: 800; margin-bottom: 18px; display: flex; align-items: center; gap: 10px; color: var(--text); }
+
+  /* ── FUNNEL STEPS ── */
+  .funnel { display: flex; flex-direction: column; gap: 6px; }
+  .fstep {
+    background: var(--surface); border: 1.5px solid var(--border);
+    border-radius: var(--radius); overflow: hidden;
+    box-shadow: var(--shadow); transition: border-color .2s;
+  }
+  .fstep:hover { border-color: #C0A0E0; }
+  .fstep.open { border-color: var(--purple); }
+  .fstep-header {
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 18px; cursor: pointer; user-select: none;
+  }
+  .fnum {
+    min-width: 32px; height: 32px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 13px; font-family: var(--mono);
+    color: white; flex-shrink: 0;
+  }
+  .finfo { flex: 1; }
+  .ftitle { font-weight: 700; font-size: 14.5px; color: var(--text); }
+  .fsub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .farrow { color: var(--muted); font-size: 10px; transition: transform .2s; flex-shrink: 0; }
+  .fstep.open .farrow { transform: rotate(180deg); }
+  .fbody { display: none; padding: 6px 18px 18px; border-top: 1px solid var(--border); }
+  .fstep.open .fbody { display: block; }
+
+  /* ── SCRIPT BOXES ── */
+  .sbox {
+    background: var(--purple-light); border-left: 4px solid var(--purple);
+    border-radius: 0 8px 8px 0; padding: 13px 16px;
+    font-size: 13.5px; line-height: 1.75; margin: 10px 0; color: var(--text);
+  }
+  .sbox.orange { background: var(--orange-light); border-left-color: var(--orange); }
+  .sbox.teal   { background: var(--teal-light); border-left-color: var(--teal); }
+  .sbox.cream  { background: var(--cream); border-left-color: var(--amber); }
+  .sbox.neutral { background: rgba(123,110,144,0.07); border-left-color: var(--muted); }
+  .slabel {
+    font-size: 9.5px; font-weight: 700; letter-spacing: 1.8px;
+    text-transform: uppercase; font-family: var(--mono);
+    color: var(--purple); display: block; margin-bottom: 8px;
+  }
+  .sbox.orange .slabel { color: var(--orange); }
+  .sbox.teal   .slabel { color: var(--teal); }
+  .sbox.cream  .slabel { color: var(--amber); }
+  .sbox.neutral .slabel { color: var(--muted); }
+
+  /* ── QUESTION PROMPT ── */
+  .qprompt {
+    background: linear-gradient(135deg, #FFF2EE, #FFF8F5);
+    border: 1px solid rgba(232,78,27,0.2);
+    border-left: 4px solid var(--orange);
+    border-radius: 0 8px 8px 0;
+    padding: 11px 15px; margin: 10px 0;
+    display: flex; align-items: flex-start; gap: 10px;
+  }
+  .qprompt-icon { font-size: 15px; flex-shrink: 0; margin-top: 2px; }
+  .qprompt-inner { flex: 1; }
+  .qprompt-label {
+    font-size: 9.5px; font-weight: 700; letter-spacing: 1.8px;
+    text-transform: uppercase; font-family: var(--mono);
+    color: var(--orange); display: block; margin-bottom: 5px;
+  }
+  .qprompt-text { font-size: 13.5px; line-height: 1.7; color: var(--text); }
+
+  /* ── NOTES ── */
+  .snote {
+    font-size: 11.5px; color: var(--muted); font-style: italic;
+    padding: 6px 10px; background: rgba(123,110,144,0.07);
+    border-radius: 6px; border-left: 3px solid var(--border);
+    margin: 6px 0;
+  }
+  .snote::before { content: "↳ "; font-style: normal; }
+  .tip {
+    font-size: 12.5px; color: var(--purple);
+    padding: 8px 12px; background: rgba(110,63,181,0.06);
+    border-radius: 8px; border-left: 3px solid var(--purple-mid);
+    margin: 10px 0;
+  }
+  .tip b { color: var(--purple); }
+
+  /* ── RESPONSE GRID ── */
+  .resp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
+  .resp-card { border-radius: 10px; padding: 10px 14px; font-size: 13px; border: 1px solid; }
+
+  /* ── PAIN CARDS ── */
+  .pains-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+  .pain-card {
+    background: var(--surface); border: 1.5px solid var(--border);
+    border-radius: var(--radius); overflow: hidden;
+    cursor: pointer; transition: all .2s;
+  }
+  .pain-card:hover { border-color: var(--purple); transform: translateY(-2px); box-shadow: var(--shadow); }
+  .pain-header { padding: 14px 18px; display: flex; align-items: flex-start; gap: 12px; }
+  .pain-icon { font-size: 18px; flex-shrink: 0; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 8px; }
+  .pain-title { font-size: 14px; font-weight: 700; line-height: 1.4; color: var(--text); }
+  .pain-freq { font-size: 10.5px; margin-top: 3px; font-weight: 600; padding: 2px 8px; border-radius: 20px; display: inline-block; font-family: var(--mono); }
+  .pain-body { display: none; padding: 12px 18px 16px; border-top: 1px solid var(--border); }
+  .pain-card.open .pain-body { display: block; }
+  .quote-chip {
+    background: var(--purple-light); border-left: 3px solid var(--purple);
+    border-radius: 0 7px 7px 0; padding: 8px 12px;
+    font-size: 12.5px; font-style: italic; color: var(--muted);
+    margin-bottom: 8px; line-height: 1.5;
+  }
+  .close-line {
+    font-size: 12.5px; color: var(--teal);
+    padding: 8px 12px; background: var(--teal-light);
+    border-radius: 8px; border: 1px solid rgba(46,136,119,0.2);
+    margin-top: 10px;
+  }
+  .close-line::before { content: "✓ "; font-weight: 700; }
+
+  /* ── OBJECTIONS ── */
+  .obj-list { display: flex; flex-direction: column; gap: 8px; }
+  .obj-item {
+    background: var(--surface); border: 1.5px solid var(--border);
+    border-radius: var(--radius); overflow: hidden;
+    cursor: pointer; transition: border-color .2s;
+  }
+  .obj-item:hover, .obj-item.open { border-color: var(--orange); }
+  .obj-trigger { padding: 14px 18px; display: flex; align-items: center; gap: 12px; }
+  .obj-num {
+    width: 30px; height: 30px; background: var(--orange-light);
+    border: 1px solid rgba(232,78,27,0.2); border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 800; color: var(--orange); flex-shrink: 0;
+    font-family: var(--mono);
+  }
+  .obj-title { font-weight: 700; font-size: 14.5px; flex: 1; color: var(--text); }
+  .obj-arrow { color: var(--muted); font-size: 10px; transition: transform .2s; flex-shrink: 0; }
+  .obj-item.open .obj-arrow { transform: rotate(180deg); }
+  .obj-body { display: none; padding: 4px 18px 18px; border-top: 1px solid var(--border); }
+  .obj-item.open .obj-body { display: block; }
+  .parr-step { display: flex; gap: 10px; margin: 8px 0; align-items: flex-start; }
+  .parr-label {
+    min-width: 28px; height: 28px; border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 800; letter-spacing: 0.5px;
+    flex-shrink: 0; font-family: var(--mono);
+  }
+  .parr-text { font-size: 13.5px; line-height: 1.65; padding-top: 4px; color: var(--text); }
+
+  /* ── CHECKLIST ── */
+  .cl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .cl-section { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 18px; }
+  .cl-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; font-family: var(--mono); }
+  .cl-item {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+    font-size: 13px; line-height: 1.5; cursor: pointer;
+    transition: color .15s; color: var(--text);
+  }
+  .cl-item:last-child { border-bottom: none; }
+  .cl-item:hover { color: var(--purple); }
+  .cl-item.checked { color: var(--muted); text-decoration: line-through; }
+  .cl-item.checked .ckmark { background: var(--purple); border-color: var(--purple); }
+  .cl-item.checked .ckmark::after { display: block; }
+  .ckmark {
+    width: 17px; height: 17px; min-width: 17px;
+    border: 2px solid var(--border); border-radius: 4px;
+    margin-top: 2px; position: relative; transition: all .15s;
+  }
+  .ckmark::after { content: "✓"; display: none; position: absolute; top: -2px; left: 1px; font-size: 11px; color: #fff; font-weight: 800; }
+
+  /* ── PHRASES ── */
+  .phrases-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; }
+  .phrase-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 16px; }
+  .phrase-tag { font-size: 9.5px; font-weight: 700; letter-spacing: 1.8px; text-transform: uppercase; margin-bottom: 9px; display: block; font-family: var(--mono); }
+  .phrase-text { font-size: 13.5px; line-height: 1.65; font-style: italic; color: var(--text); }
+  .phrase-use { font-size: 12px; color: var(--muted); margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--border); }
+  .no-list { background: var(--surface); border: 1.5px solid rgba(232,78,27,0.25); border-radius: var(--radius); padding: 18px; margin-top: 14px; }
+  .no-title { font-size: 11px; font-weight: 700; color: var(--orange); text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; font-family: var(--mono); }
+  .no-item { display: flex; gap: 10px; padding: 7px 0; font-size: 13px; border-bottom: 1px solid var(--border); color: var(--text); }
+  .no-item:last-child { border-bottom: none; }
+  .no-icon { color: var(--orange); flex-shrink: 0; font-weight: 700; }
+
+  /* ── TRIGGERS ── */
+  .trg-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .trg-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 20px; text-align: center; }
+  .trg-emoji { font-size: 32px; margin-bottom: 10px; }
+  .trg-num { font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; font-family: var(--mono); }
+  .trg-title { font-size: 14.5px; font-weight: 700; margin-bottom: 8px; color: var(--text); }
+  .trg-desc { font-size: 12.5px; color: var(--muted); line-height: 1.6; }
+  .trg-action { margin-top: 12px; padding: 8px 12px; background: var(--teal-light); border: 1px solid rgba(46,136,119,0.2); border-radius: 8px; font-size: 12.5px; color: var(--teal); text-align: left; line-height: 1.5; }
+
+  /* ── SCROLL TOP ── */
+  .scroll-top {
+    position: fixed; bottom: 24px; right: 24px;
+    width: 40px; height: 40px; background: var(--purple); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 18px; color: white;
+    box-shadow: var(--shadow); opacity: 0; transition: opacity .3s;
+    pointer-events: none; z-index: 200;
+  }
+  .scroll-top.visible { opacity: 1; pointer-events: auto; }
+
+  @media (max-width: 720px) {
+    .main { padding: 16px 14px 48px; }
+    .cl-grid { grid-template-columns: 1fr; }
+    .trg-grid { grid-template-columns: 1fr; }
+    .resp-grid { grid-template-columns: 1fr; }
+    .pains-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── HEADER ── -->
+<div class="header">
+  <div class="header-inner">
+    <div class="header-top">
+      <div class="yogo-logo">YOGO</div>
+      <span class="header-slash">/</span>
+      <div class="header-badge">8 000 ₽ · 8 занятий · 8 чел</div>
+    </div>
+    <div class="header-title"><strong>Скрипт продажи</strong> · Звонок после пробного занятия</div>
+    <div class="tabs">
+      <button class="tab-btn active" onclick="showPage('funnel')" id="tab-funnel">
+        <span class="tab-dot" style="background:#A07AE0"></span> СКРИПТ
+      </button>
+      <button class="tab-btn" onclick="showPage('pains')" id="tab-pains">
+        <span class="tab-dot" style="background:#E84E1B"></span> БОЛИ
+      </button>
+      <button class="tab-btn" onclick="showPage('objections')" id="tab-objections">
+        <span class="tab-dot" style="background:#B8963A"></span> ВОЗРАЖЕНИЯ
+      </button>
+      <button class="tab-btn" onclick="showPage('phrases')" id="tab-phrases">
+        <span class="tab-dot" style="background:#2E8877"></span> ФРАЗЫ
+      </button>
+      <button class="tab-btn" onclick="showPage('triggers')" id="tab-triggers">
+        <span class="tab-dot" style="background:#E84E1B"></span> ТРИГГЕРЫ
+      </button>
+      <button class="tab-btn" onclick="showPage('checklist')" id="tab-checklist">
+        <span class="tab-dot" style="background:#6E3FB5"></span> ЧЕК-ЛИСТ
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MAIN ── -->
+<div class="main">
+
+<!-- ████  PAGE: СКРИПТ  ████ -->
+<div class="page active" id="page-funnel">
+  <div class="page-title">🌀 Скрипт звонка — после пробного</div>
+
+  <div class="funnel">
+
+    <!-- STEP 0 -->
+    <div class="fstep" onclick="toggleF(this)">
+      <div class="fstep-header">
+        <div class="fnum" style="background:var(--muted)">0</div>
+        <div class="finfo">
+          <div class="ftitle">📋 Подготовка — 30 секунд</div>
+          <div class="fsub">Смотрю карточку прямо перед звонком</div>
+        </div>
+        <div class="farrow">▼</div>
+      </div>
+      <div class="fbody">
+        <div class="sbox">
+          <span class="slabel">Что проверяю</span>
+          ✦ Была ли студентка на пробном занятии<br>
+          ✦ Какую оценку поставила — и поставила ли вообще
+        </div>
+        <div class="tip"><b>Зачем:</b> в первой же фразе называю конкретику — дату занятия, оценку. Студентка сразу понимает, что это личный звонок, а не обзвон по списку.</div>
+      </div>
+    </div>
+
+    <!-- STEP 1 -->
+    <div class="fstep" onclick="toggleF(this)">
+      <div class="fstep-header">
+        <div class="fnum" style="background:var(--purple)">1</div>
+        <div class="finfo">
+          <div class="ftitle">🚪 Открытие</div>
+          <div class="fsub">Цель: согласие пообщаться + первые живые впечатления о занятии</div>
+        </div>
+        <div class="farrow">▼</div>
+      </div>
+      <div class="fbody">
+        <div class="sbox">
+          <span class="slabel">📞 Скрипт</span>
+          — Здравствуй, [Имя]! Это Ксения из Академии йоги. Ты была у нас на пробном занятии [дата] — всё верно? Удобно сейчас пообщаться минут 5–10? Хотела узнать, как тебе.<br><br>
+          [Пауза — жду ответа]
+        </div>
+        <div class="qprompt">
+          <div class="qprompt-icon">💬</div>
+          <div class="qprompt-inner">
+            <span class="qprompt-label">Если «да, удобно» — продолжаю</span>
+            <div class="qprompt-text">— Отлично. Вижу, что поставила [оценку] — рада слышать. Расскажи в двух словах: что больше всего запомнилось? Что почувствовала?<br><br>[Пауза — слушаю, запоминаю формулировки дословно]</div>
+          </div>
+        </div>
+        <div class="snote">Если оценку не поставила: «Ничего страшного, мне просто важно услышать живые ощущения»</div>
+      </div>
+    </div>
+
+    <!-- STEP 2 -->
+    <div class="fstep" onclick="toggleF(this)">
+      <div class="fstep-header">
+        <div class="fnum" style="background:var(--orange)">2</div>
+        <div class="finfo">
+          <div class="ftitle">🎙 Квалификация</div>
+          <div class="fsub">Слушаю, запоминаю дословно — потом зеркалю в презентации</div>
+        </div>
+        <div class="farrow">▼</div>
+      </div>
+      <div class="fbody">
+        <div class="sbox orange">
+          <span class="slabel">Связка → анкета занятия</span>
+          — Спасибо, что поделилась — мне это правда важно слышать. Смотрю на анкету, которую ты заполняла перед занятием — там ты указывала, что хотела бы [цели из анкеты]. Как тебе кажется: пробное дало хотя бы общее ощущение, реализуемо ли это для тебя?<br><br>
+          [Пауза — слушаю]
+        </div>
+        <div class="sbox orange">
+          <span class="slabel">Вопрос 1 — практика вне курса</span>
+          — Расскажи, как сейчас у тебя с практикой вне курса? Получается регулярно — или скорее по настроению?<br><br>
+          [Пауза]
+        </div>
+        <div class="sbox orange">
+          <span class="slabel">Вопрос 2 — желаемые изменения</span>
+          — Если представить: ты занимаешься три месяца и доходишь до идеального для себя результата — как это должно выглядеть? Можешь описать своими словами?<br><br>
+          [Пауза]
+        </div>
+        <div class="sbox orange">
+          <span class="slabel">Вопрос 3 — барьер</span>
+          — А что сейчас главное мешает? Если честно.<br><br>
+          [Пауза]
+        </div>
+        <div class="sbox neutral">
+          <span class="slabel">Доп. — если модуль 6+</span>
+          — Ещё хочу спросить: экзамен по личной практике впереди. Как сейчас внутри себя к этому относишься — спокойно, или ощущается напряжение?
+        </div>
+        <div class="tip"><b>Главное:</b> её слова запоминаю дословно — именно их проговорю в презентации как зеркало. Не интерпретирую — повторяю.</div>
+      </div>
+    </div>
+
+    <!-- STEP 3 -->
+    <div class="fstep" onclick="toggleF(this)">
+      <div class="fstep-header">
+        <div class="fnum" style="background:var(--purple-mid)">3</div>
+        <div class="finfo">
+          <div class="ftitle">✨ Презентация — зеркалим боли клиентки</div>
+          <div class="fsub">Её слова → показываю, как продукт их закрывает. После каждого блока — вопрос.</div>
+        </div>
+        <div class="farrow">▼</div>
+      </div>
+      <div class="fbody">
+
+        <!-- Block 1 -->
+        <div style="margin-top:6px;margin-bottom:4px;font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;">Блок 1 — Что такое YoGo</div>
+        <div class="sbox">
+          <span class="slabel">Скрипт</span>
+          — Хочу рассказать, что такое YoGo, — и ты сама поймёшь: про тебя это или нет.<br><br>
+          YoGo — это сервис регулярной личной практики, который мы создали специально для студентов Тичерса. Не для всех подряд — именно для вас.<br><br>
+          В группе не будет людей со стороны. Только однокурсники, которые сейчас на том же этапе обучения, что и ты. И практика здесь выстраивается не в вакууме, а как продолжение того, что вы проходите на курсе — как подложка под ту методическую базу, которую даёт Тичерс.<br><br>
+          Но самое важное вот в чём: YoGo — это не просто «хорошо позаниматься для себя». Мы очень глубоко затрагиваем педагогический аспект. Ты наблюдаешь, как преподаватель работает с группой, какие правки даёт, как решает сложности — прямо в моменте. В маленькой группе ты развиваешь ту насмотренность, которую не получишь из теории. И когда выйдешь преподавать — будешь знать это изнутри.
+        </div>
+        <div class="qprompt">
+          <div class="qprompt-icon">💬</div>
+          <div class="qprompt-inner">
+            <span class="qprompt-label">Вопрос после блока 1</span>
+            <div class="qprompt-text">— Как тебе такой формат звучит? Что-то из этого откликается?</div>
+          </div>
+        </div>
+
+        <!-- Block 2 -->
+        <div style="margin-top:16px;margin-bottom:4px;font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;">Блок 2 — Попадание в боль (её слова!)</div>
+        <div class="sbox orange">
+          <span class="slabel">Если нет регулярности</span>
+          — Ты говорила, что с регулярностью не очень. Понимаю — это самое частое, что я слышу. Когда мы опрашивали студентов во время подготовки этого продукта, большинство грустили о том же. Когда занимаешься сама, слиться очень легко. В YoGo расписание уже стоит, тебя ждёт группа, преподаватель видит тебя на экране с первой минуты. И мысль «ну не пойду сегодня» — просто перестаёт быть лёгкой. Совсем не как с записями.<br><br>
+          Плюс — перед каждым занятием анкета: ты говоришь, что хочешь сегодня проработать, и преподаватель выстраивает практику под это.
+        </div>
+        <div class="sbox orange">
+          <span class="slabel">Если сложные асаны</span>
+          — Ты упомянула [асана]. В YoGo есть тематические недели — они формируются под запросы именно вашей группы. Преподаватель работает с тобой прямо в моменте, пока форма не встанет так, как тебе нужно.
+        </div>
+        <div class="sbox orange">
+          <span class="slabel">Если боюсь экзамена</span>
+          — Ты сейчас на [Х модуле], до экзамена [N месяцев]. Преподаватели YoGo — люди, которые прошли обучение в академии, успешно работают и ведут частную практику. Они точно знают, на что смотрят на экзамене. За 2–3 месяца работы в YoGo студентки приходят к нему без тревоги — с практикой, которая просто есть в теле.
+        </div>
+        <div class="qprompt">
+          <div class="qprompt-icon">💬</div>
+          <div class="qprompt-inner">
+            <span class="qprompt-label">Вопрос после блока 2</span>
+            <div class="qprompt-text">— Ты чувствуешь, что именно это сейчас актуально? Или что-то другое стоит острее?</div>
+          </div>
+        </div>
+
+        <!-- Block 3 -->
+        <div style="margin-top:16px;margin-bottom:4px;font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;">Блок 3 — Почему мы, а не «любая онлайн-йога»</div>
+        <div class="sbox teal">
+          <span class="slabel">Скрипт</span>
+          1️⃣ Преподаватели знают твой учебный трек — практика идёт параллельно модулям курса<br>
+          2️⃣ Группа до 8 человек — каждой достаётся внимание и правка в моменте<br>
+          3️⃣ Преподаватель помнит тебя от занятия к занятию — знает, где проседает, куда ведёт<br>
+          4️⃣ <b>Официальный документ:</b> все занятия фиксируются. По окончании ты получаешь удостоверение — идёт как приложение к диплому, вносится в ФИС ФРДО. Подтверждённый опыт практики — у большинства выпускников теория есть, а вот это — нет.
+        </div>
+        <div class="qprompt">
+          <div class="qprompt-icon">💬</div>
+          <div class="qprompt-inner">
+            <span class="qprompt-label">Вопрос после блока 3</span>
+            <div class="qprompt-text">— Что из этого для тебя сейчас наиболее важно?</div>
+          </div>
+        </div>
+
+        <!-- Block 4 -->
+        <div style="margin-top:16px;margin-bottom:4px;font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;">Блок 4 — Цена · спокойно, без продажной интонации</div>
+        <div class="sbox cream">
+          <span class="slabel">Скрипт</span>
+          — Абонемент — 8 000 ₽ в месяц. Это 8 занятий — два раза в неделю по часу. Получается 1 000 ₽ за занятие. И это не запись, а живой эфир с преподавателем, в группе до 8 человек, где тебя видят и работают с тобой конкретно.<br><br>
+          Для понимания контекста: на рынке сейчас минимальная стоимость занятия у хорошего педагога — от 1 500 до 5 000 ₽. Здесь — 1 000 ₽. Это потому, что мы внутри академии и специально сделали для студентов доступную цену.<br><br>
+          И вот ещё важная мысль: ты будущий преподаватель. За такую работу, которую здесь будут проводить с тобой, ты сама в будущем будешь брать больше. Сейчас, пока ты учишься — у тебя есть возможность получить это за сумму, которая на порядок ниже рыночной.
+        </div>
+        <div class="qprompt">
+          <div class="qprompt-icon">💬</div>
+          <div class="qprompt-inner">
+            <span class="qprompt-label">Вопрос после блока 4</span>
+            <div class="qprompt-text">— Как тебе по цифрам? Есть что-то, что хочется уточнить?</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- STEP 4 -->
+    <div class="fstep" onclick="toggleF(this)">
+      <div class="fstep-header">
+        <div class="fnum" style="background:var(--teal)">4</div>
+        <div class="finfo">
+          <div class="ftitle">🤝 Закрытие — прямой вопрос</div>
+          <div class="fsub">Пауза! Молчу, даю ответить первой</div>
+        </div>
+        <div class="farrow">▼</div>
+      </div>
+      <div class="fbody">
+        <div class="sbox teal">
+          <span class="slabel">Вопрос закрытия</span>
+          — Как тебе такой формат? Как думаешь, поможет ли это реализовать то, о чём ты говорила?<br><br>
+          [Пауза — жду, молчу, даю ответить первой]
+        </div>
+        <div class="resp-grid">
+          <div class="resp-card" style="background:var(--teal-light);border-color:rgba(46,136,119,0.3)">
+            <div style="color:var(--teal);font-weight:700;margin-bottom:4px;font-size:13px">«Да, где платить»</div>
+            <span style="font-size:13px">→ Сразу к оплате. Ничего не добавляю.</span>
+          </div>
+          <div class="resp-card" style="background:var(--cream);border-color:var(--cream-border)">
+            <div style="color:var(--amber);font-weight:700;margin-bottom:4px;font-size:13px">«Интересно, но…»</div>
+            <span style="font-size:13px">→ Возражение → вкладка ВОЗРАЖЕНИЯ</span>
+          </div>
+          <div class="resp-card" style="background:var(--orange-light);border-color:rgba(232,78,27,0.2)">
+            <div style="color:var(--orange);font-weight:700;margin-bottom:4px;font-size:13px">«Мне нужно подумать»</div>
+            <span style="font-size:13px">→ «О чём именно?» → возражения</span>
+          </div>
+          <div class="resp-card" style="background:var(--purple-light);border-color:var(--border)">
+            <div style="color:var(--purple);font-weight:700;margin-bottom:4px;font-size:13px">«Не моё / не сейчас»</div>
+            <span style="font-size:13px">→ «Что именно — формат, цена, время?»</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 5 -->
+    <div class="fstep" onclick="toggleF(this)">
+      <div class="fstep-header">
+        <div class="fnum" style="background:var(--amber)">5</div>
+        <div class="finfo">
+          <div class="ftitle">💳 Оплата и онбординг</div>
+          <div class="fsub">Перевести «да» в оплату до конца разговора</div>
+        </div>
+        <div class="farrow">▼</div>
+      </div>
+      <div class="fbody">
+        <div class="sbox cream">
+          <span class="slabel">Шаг 1 — фиксирую «да»</span>
+          — Отлично. Тогда фиксирую: абонемент 8 000 ₽, 8 занятий, стартуем с ближайшего потока [дата]. Расписание пришлю — там два слота в неделю, выберешь удобные.
+        </div>
+        <div class="sbox cream">
+          <span class="slabel">Шаг 2 — способ оплаты</span>
+          — Ссылка действует до 12 часов ночи в день выставления. Будешь оплачивать сегодня или завтра?
+          <div class="snote">Проверяю, насколько студентка замотивирована</div>
+        </div>
+        <div class="sbox cream">
+          <span class="slabel">Шаг 3 — мягкое ограничение</span>
+          — Группа до 8 человек, места закрываются по мере оплаты. Сейчас ещё есть твой слот — давай зафиксируем?
+        </div>
+        <div class="sbox cream">
+          <span class="slabel">Шаг 4 — после оплаты</span>
+          — Онбординг в процессе разработки — ждёт дополнение ✌️
+        </div>
+        <div class="tip"><b>Важно:</b> если уходит на «подумаю» — фиксирую конкретную дату следующего касания. Без даты — теряю лид.</div>
+      </div>
+    </div>
+
+  </div><!-- /funnel -->
+</div>
+
+<!-- ████  PAGE: БОЛИ  ████ -->
+<div class="page" id="page-pains">
+  <div class="page-title">💥 Боли студенток — 7 паттернов</div>
+
+  <div class="pains-grid">
+
+    <div class="pain-card" onclick="togglePain(this)">
+      <div class="pain-header">
+        <div class="pain-icon" style="background:var(--orange-light)">⏰</div>
+        <div>
+          <div class="pain-title">«Нет времени, нет системы»</div>
+          <div class="pain-freq" style="background:var(--orange-light);color:var(--orange)">~60% кастдевов · Паттерн #1</div>
+        </div>
+      </div>
+      <div class="pain-body">
+        <div class="quote-chip" style="border-left-color:var(--orange)">«Главная сложность — иногда себя заставить. Отговорок больше, чем практики.»</div>
+        <div class="quote-chip" style="border-left-color:var(--orange)">«Когда сама занимаешься — можно пропустить. Когда тебя ждут — не так легко слиться.»</div>
+        <div class="close-line">YoGo снимает решение «идти или нет» — расписание стоит, группа ждёт, преподаватель знает твоё имя.</div>
+      </div>
+    </div>
+
+    <div class="pain-card" onclick="togglePain(this)">
+      <div class="pain-header">
+        <div class="pain-icon" style="background:var(--purple-light)">👁</div>
+        <div>
+          <div class="pain-title">«Нужна живая обратная связь»</div>
+          <div class="pain-freq" style="background:var(--purple-light);color:var(--purple)">Очень частая · Паттерн #2</div>
+        </div>
+      </div>
+      <div class="pain-body">
+        <div class="quote-chip">«По записям неэффективно — нужна обратная связь от преподавателя.»</div>
+        <div class="quote-chip">«Варимся в собственном соку. Какие ошибки — тянем их с собой.»</div>
+        <div class="close-line">YoGo — живой эфир, преподаватель тебя видит. Группа до 8 — каждой достаётся индивидуальная правка в моменте.</div>
+      </div>
+    </div>
+
+    <div class="pain-card" onclick="togglePain(this)">
+      <div class="pain-header">
+        <div class="pain-icon" style="background:var(--cream)">😰</div>
+        <div>
+          <div class="pain-title">«Тревога перед экзаменом»</div>
+          <div class="pain-freq" style="background:var(--cream);color:var(--amber)">Модули 6–8 · Паттерн #3</div>
+        </div>
+      </div>
+      <div class="pain-body">
+        <div class="quote-chip" style="border-left-color:var(--amber)">«Вылетит из головы. Волнение блокирует интеллект.»</div>
+        <div class="quote-chip" style="border-left-color:var(--amber)">«К концу обучения — перегруз, страх перед экзаменом.»</div>
+        <div class="close-line">Преподаватели YoGo за 2–3 месяца доводят практику до уровня, с которым идут спокойно и уверенно.</div>
+      </div>
+    </div>
+
+    <div class="pain-card" onclick="togglePain(this)">
+      <div class="pain-header">
+        <div class="pain-icon" style="background:var(--teal-light)">🤸</div>
+        <div>
+          <div class="pain-title">«Хочу дожать сложные асаны»</div>
+          <div class="pain-freq" style="background:var(--teal-light);color:var(--teal)">~40% · Паттерн #4</div>
+        </div>
+      </div>
+      <div class="pain-body">
+        <div class="quote-chip" style="border-left-color:var(--teal)">«Пытаюсь добиться чатуранги — не выхожу в неё.»</div>
+        <div class="quote-chip" style="border-left-color:var(--teal)">«Стойки — очень актуально. Если бы были такие занятия, я бы старалась попасть.»</div>
+        <div class="close-line">Тематические недели под конкретные формы. Преподаватель работает с тобой, пока форма не встанет оптимальным образом.</div>
+      </div>
+    </div>
+
+    <div class="pain-card" onclick="togglePain(this)">
+      <div class="pain-header">
+        <div class="pain-icon" style="background:var(--purple-light)">👥</div>
+        <div>
+          <div class="pain-title">«Одной сложно, нет системы»</div>
+          <div class="pain-freq" style="background:var(--purple-light);color:var(--purple)">Стабильно · Паттерн #5</div>
+        </div>
+      </div>
+      <div class="pain-body">
+        <div class="quote-chip">«Мне важен клуб единомышленников — обмен энергией, группа до 5 человек.»</div>
+        <div class="quote-chip">«В группе можно на других увидеть то, что у себя не заметишь.»</div>
+        <div class="close-line">Группа до 8 — микро-сообщество по потоку. Вы идёте по одной программе. Не анонимный онлайн, а ребята с курса.</div>
+      </div>
+    </div>
+
+    <div class="pain-card" onclick="togglePain(this)">
+      <div class="pain-header">
+        <div class="pain-icon" style="background:var(--cream)">💸</div>
+        <div>
+          <div class="pain-title">«Хожу к сторонним преподавателям»</div>
+          <div class="pain-freq" style="background:var(--cream);color:var(--amber)">~30% · Паттерн #6</div>
+        </div>
+      </div>
+      <div class="pain-body">
+        <div class="quote-chip" style="border-left-color:var(--amber)">«Покупаю уроки в МН, марафон по чатуранге, урок с Ириной Павловой.»</div>
+        <div class="close-line">Вместо сборки по кускам — преподаватель, который знает твою программу. За 8 000 ₽ вместо 15–20 тысяч на сторонние подписки.</div>
+      </div>
+    </div>
+
+    <div class="pain-card" onclick="togglePain(this)">
+      <div class="pain-header">
+        <div class="pain-icon" style="background:var(--orange-light)">😟</div>
+        <div>
+          <div class="pain-title">«Страх не стать преподавателем»</div>
+          <div class="pain-freq" style="background:var(--orange-light);color:var(--orange)">Старшие модули · Паттерн #7</div>
+        </div>
+      </div>
+      <div class="pain-body">
+        <div class="quote-chip" style="border-left-color:var(--orange)">«Страх, что не найду клиентов.»</div>
+        <div class="quote-chip" style="border-left-color:var(--orange)">«Уже не уверена, что хочу преподавать — не готова к большому потоку.»</div>
+        <div class="close-line">В YoGo насматриваешься, как ведут преподаватели разного стиля. К выпуску — готовые «шаблоны» урока в голове и официально подтверждённый опыт практики.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ████  PAGE: ВОЗРАЖЕНИЯ  ████ -->
+<div class="page" id="page-objections">
+  <div class="page-title">🛡 Отработка возражений</div>
+  <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Схема ПАРР: <b>П</b>рисоединяюсь → <b>А</b>ргумент → <b>Р</b>еальная ценность → <b>Р</b>еверс-вопрос</p>
+
+  <div class="obj-list">
+
+    <div class="obj-item" onclick="toggleObj(this)">
+      <div class="obj-trigger"><div class="obj-num">1</div><div class="obj-title">Нет времени / не успеваю</div><div class="obj-arrow">▼</div></div>
+      <div class="obj-body">
+        <div class="snote" style="margin-bottom:12px">6 из 10 студенток называют именно это — самое частое</div>
+        <div class="parr-step"><div class="parr-label" style="background:var(--purple-light);color:var(--purple)">П</div><div class="parr-text">— Да, это самое частое, что слышу — и совершенно понимаю, откуда это ощущение берётся.</div></div>
+        <div class="parr-step"><div class="parr-label" style="background:var(--cream);color:var(--amber)">А</div><div class="parr-text">— Смотри: ты и сейчас как-то выделяешь время на практику — просто бессистемно, без расписания. YoGo — это ровно 2 часа в неделю, которые уже стоят в календаре. Не нужно каждый раз решать, что делать сегодня на коврике.</div></div>
+        <div class="parr-step"><div class="parr-label" style="background:var(--teal-light);color:var(--teal)">РЦ</div><div class="parr-text">— Студентки в кастдевах говорили именно об этом: когда сама занимаешься — легко пропустить. Когда тебя ждут — слиться уже совсем другое дело.</div></div>
+        <div class="parr-step"><div class="parr-label" style="background:var(--orange-light);color:var(--orange)">Р</div><div class="parr-text">— Скажи, если бы у тебя было два фиксированных часа в неделю — в какие дни было бы комфортнее? Просто посмотрим теоретически, как это могло бы выглядеть.</div></div>
+      </div>
+    </div>
+
+    <div class="obj-item" onclick="toggleObj(this)">
+      <div class="obj-trigger"><div class="obj-num">2</div><div class="obj-title">Дорого / 8 000 ₽ — это много</div><div class="obj-arrow">▼</div></div>
+      <div class="obj-body">
+        <div class="parr-step"><div class="parr-label" style="background:var(--purple-light);color:var(--purple)">П</div><div class="parr-text">— Понимаю — сумма не маленькая, и рада, что говоришь об этом открыто, а не просто ладно.</div></div>
+        <div class="parr-step"><div class="parr-label" style="background:var(--cream);color:var(--amber)">А</div><div class="parr-text">— Смотри на цифры честно: у именных педагогов занятие от 1 500 до 5 000 ₽. Здесь — 1 000 ₽ за урок в группе до 8 человек, где преподаватель знает твой учебный трек, твой модуль и твой личный кейс.</div></div>
+        <div class="parr-step"><div class="parr-label" style="background:var(--teal-light);color:var(--teal)">РЦ</div><div class="parr-text">— Это единственный формат практики, где преподаватель ведёт тебя параллельно курсу — не в вакууме, а прямо под твой экзамен. И помни: ты будущий преподаватель — ты сама за такую работу будешь брать больше.</div></div>
+        <div class="parr-step"><div class="parr-label" style="background:var(--orange-light);color:var(--orange)">Р</div><div class="parr-text">— Если отвлечься от суммы на секунду — сам формат тебе откликается? Группа до 8 человек, живая обратная связь от своего педагога?</div></div>
+      </div>
+    </div>
+
+    <div class="obj-item" onclick="toggleObj(this)">
+      <div class="obj-trigger"><div class="obj-num">3</div><div class="obj-title">Я хожу в студию / занимаюсь у другого педагога</div><div class="obj-arrow">▼</div></div>
+      <div class="obj-body">
+        <div class="parr-step"><div class="parr-label" style="background:var(--purple-light);color:var(--purple)">П</div><div class="parr-text">— Это здорово — значит, живая практика для тебя уже в приоритете, и ты точно понимаешь её ценность.</div></div>
+        <div class="parr-step"><div class="parr-label" style="background:var(--cream);color:var(--amber)">А</div><div class="parr-text">— YoGo не заменяет то, куда ты ходишь — дополняет. Разница в одном: преподаватель здесь знает, что ты на Тичерсе, знает твои модули и знает, к чему именно тебе нужно прийти в технике. В студии — общая практика для всех. Здесь — точечная работа под твой экзамен.</div></div>
+        <div class="parr-step"><div class="parr-label" style="background:var(--teal-light);color:var(--teal)">РЦ</div><div class="parr-text">— В больших онлайн-группах 30–50 человек, анонимность. Здесь — до 8, правки по имени прямо в моменте. Это другой уровень внимания.</div></div>
+        <div class="parr-step"><div class="parr-label" style="background:var(--orange-light);color:var(--orange)">Р</div><div class="parr-text">— Скажи, твой нынешний педагог знает, что ты на программе Тичерс и к чему нужно прийти до экзамена?</div></div>
+      </div>
+    </div>
+
+    <div class="obj-item" onclick="toggleObj(this)">
+      <div class="obj-trigger"><div class="obj-num">4</div><div class="obj-title">Разберусь сама / посмотрю записи</div><div class="obj-arrow">▼</div></div>
+      <div class="obj-body">
+        <div class="parr-step"><div class="parr-label" style="background:var(--purple-light);color:var(--purple)">П</div><div class="parr-text">— Да, записи удобны и всегда доступны, понимаю этот выбор.</div></div>
+        <div class="parr-step"><div class="parr-label" style="background:var(--cream);color:var(--amber)">А</div><div class="parr-text">— Но вот в чём штука: по записям ты не видишь себя со стороны. Ошибки в технике не слышны изнутри — копятся незаметно. Студентки в кастдевах говорили именно об этом: варимся в собственном соку, тянем ошибки с собой.</div></div>
+        <div class="parr-step"><div class="parr-label" style="background:var(--teal-light);color:var(--teal)">РЦ</div><div class="parr-text">— Живая обратная связь от преподавателя прямо в моменте — это то, что реально меняет технику. Без этого прогресс есть, но медленнее, и есть риск закрепить неправильное в теле.</div></div>
+        <div class="parr-step"><div class="parr-label" style="background:var(--orange-light);color:var(--orange)">Р</div><div class="parr-text">— Есть что-то в практике прямо сейчас — асана или переход — что пробуешь снова и снова, а ощущения что получается всё нет?</div></div>
+      </div>
+    </div>
+
+    <div class="obj-item" onclick="toggleObj(this)">
+      <div class="obj-trigger"><div class="obj-num">5</div><div class="obj-title">У меня и так много нагрузки по курсу</div><div class="obj-arrow">▼</div></div>
+      <div class="obj-body">
+        <div class="parr-step"><div class="parr-label" style="background:var(--purple-light);color:var(--purple)">П</div><div class="parr-text">— Слышу тебя — Тичерс правда насыщенная программа, и чувствовать что уже много — это абсолютно нормально.</div></div>
+        <div class="parr-step"><div class="parr-label" style="background:var(--cream);color:var(--amber)">А</div><div class="parr-text">— YoGo — это не ещё одно обучение поверх. Это практика, которая идёт параллельно тому, что ты уже проходишь, и синхронизирована с твоими модулями. Занятие стоит в расписании, программа готова. Просто прийти — и всё.</div></div>
+        <div class="parr-step"><div class="parr-label" style="background:var(--teal-light);color:var(--teal)">РЦ</div><div class="parr-text">— Многие студентки говорят, что именно YoGo помогает курсу осесть в теле — теория из модулей сразу проживается в живой практике, а не остаётся в голове.</div></div>
+        <div class="parr-step"><div class="parr-label" style="background:var(--orange-light);color:var(--orange)">Р</div><div class="parr-text">— На каком ты сейчас модуле? Что из практики хочется укрепить прямо в этот период?</div></div>
+      </div>
+    </div>
+
+    <div class="obj-item" onclick="toggleObj(this)">
+      <div class="obj-trigger"><div class="obj-num">6</div><div class="obj-title">Мне рано — я ещё на начальных модулях</div><div class="obj-arrow">▼</div></div>
+      <div class="obj-body">
+        <div class="parr-step"><div class="parr-label" style="background:var(--purple-light);color:var(--purple)">П</div><div class="parr-text">— Понимаю — кажется, что сначала нужно пройти больше теории, и уже потом практиковаться по-настоящему.</div></div>
+        <div class="parr-step"><div class="parr-label" style="background:var(--cream);color:var(--amber)">А</div><div class="parr-text">— На самом деле именно сейчас идеальное время. Пока база только формируется, преподаватель сразу ставит технику правильно. Те, кто начинает с ранних модулей, к экзамену приходят с уверенной, чистой практикой — без накопленных ошибок, которые потом сложно переучивать.</div></div>
+        <div class="parr-step"><div class="parr-label" style="background:var(--teal-light);color:var(--teal)">РЦ</div><div class="parr-text">— Преподаватели YoGo — люди, которые прошли обучение в академии, успешно работают и ведут частную практику. Они точно знают, на что смотрят на экзамене, и строят работу именно вокруг этого с самого начала.</div></div>
+        <div class="parr-step"><div class="parr-label" style="background:var(--orange-light);color:var(--orange)">Р</div><div class="parr-text">— Есть уже сейчас что-то в практике, что чувствуется неустойчиво — какая-то асана или просто ощущение, что не хватает фундамента?</div></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Специальный блок: Подумаю -->
+  <div style="margin-top:20px;background:var(--surface);border:2px solid var(--purple);border-radius:var(--radius);overflow:hidden;">
+    <div style="background:linear-gradient(135deg,var(--dark-purple),var(--purple));padding:13px 20px;display:flex;align-items:center;gap:10px;">
+      <span style="font-size:16px">⚠️</span>
+      <span style="color:#FFF;font-weight:700;font-size:15px">Я подумаю</span>
+      <span style="color:rgba(255,255,255,0.6);font-size:12px;margin-left:4px">— специальный блок</span>
+    </div>
+    <div style="padding:14px 18px 6px;">
+      <div class="tip" style="margin-top:0;margin-bottom:14px"><b>Правило:</b> «подумаю» без конкретной даты возврата = потерянный контакт. Цель — не давить, а мягко вскрыть и зафиксировать следующий шаг.</div>
+      <div class="obj-list" style="gap:6px;">
+
+        <div class="obj-item" onclick="toggleObj(this)">
+          <div class="obj-trigger" style="padding:11px 16px;">
+            <div style="min-width:27px;height:27px;background:var(--purple-light);border:1px solid var(--border);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:var(--purple);flex-shrink:0;font-family:var(--mono);">1</div>
+            <div class="obj-title" style="font-size:13.5px;">Нормализация + мягкое вскрытие</div>
+            <div class="obj-arrow">▼</div>
+          </div>
+          <div class="obj-body">
+            <div class="parr-text" style="padding-top:0;">— Конечно, понимаю — это не спонтанное решение. Можно просто уточню: что сейчас больше всего тормозит — вопрос суммы, расписание, или что-то ещё? Просто чтобы понимала, чем могу помочь разобраться.</div>
+            <div class="snote">Пауза 5 секунд — молчу, даю ответить</div>
+          </div>
+        </div>
+
+        <div class="obj-item" onclick="toggleObj(this)">
+          <div class="obj-trigger" style="padding:11px 16px;">
+            <div style="min-width:27px;height:27px;background:var(--purple-light);border:1px solid var(--border);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:var(--purple);flex-shrink:0;font-family:var(--mono);">2</div>
+            <div class="obj-title" style="font-size:13.5px;">Микро-коммитмент</div>
+            <div class="obj-arrow">▼</div>
+          </div>
+          <div class="obj-body">
+            <div class="parr-text" style="padding-top:0;">— Окей, услышала! Давай пришлю тебе короткое видео с живого занятия — буквально 3 минуты, чтобы ты почувствовала формат изнутри. Посмотришь сегодня вечером?</div>
+            <div class="snote">После «да» — фиксирую: «тогда напишу тебе завтра в [время] — удобно?»</div>
+          </div>
+        </div>
+
+        <div class="obj-item" onclick="toggleObj(this)">
+          <div class="obj-trigger" style="padding:11px 16px;">
+            <div style="min-width:27px;height:27px;background:var(--purple-light);border:1px solid var(--border);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:var(--purple);flex-shrink:0;font-family:var(--mono);">3</div>
+            <div class="obj-title" style="font-size:13.5px;">Будущее проецирование</div>
+            <div class="obj-arrow">▼</div>
+          </div>
+          <div class="obj-body">
+            <div class="parr-text" style="padding-top:0;">— Слышу. Скажи, если ты решишь да — когда тебе реалистично было бы к этому вернуться? Хочу зафиксировать под тебя слот, пока группа не закрылась.</div>
+          </div>
+        </div>
+
+        <div class="obj-item" onclick="toggleObj(this)">
+          <div class="obj-trigger" style="padding:11px 16px;">
+            <div style="min-width:27px;height:27px;background:var(--purple-light);border:1px solid var(--border);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:var(--purple);flex-shrink:0;font-family:var(--mono);">4</div>
+            <div class="obj-title" style="font-size:13.5px;">Зеркало ценности</div>
+            <div class="obj-arrow">▼</div>
+          </div>
+          <div class="obj-body">
+            <div class="parr-text" style="padding-top:0;">— Понимаю, не тороплю. Мне важно, чтобы решение было твоим и комфортным. Скажи — что должно сложиться, чтобы это чувствовалось как «да, момент правильный»?</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <div style="height:14px;"></div>
+  </div>
+</div>
+
+<!-- ████  PAGE: ФРАЗЫ  ████ -->
+<div class="page" id="page-phrases">
+  <div class="page-title">💬 Ключевые фразы &amp; Правила</div>
+
+  <div class="phrases-grid">
+    <div class="phrase-card">
+      <span class="phrase-tag" style="color:var(--purple)">ЧТО ЭТО</span>
+      <div class="phrase-text">«Сервис регулярной личной практики для студентов Тичерса — созданный специально для вас»</div>
+    </div>
+    <div class="phrase-card">
+      <span class="phrase-tag" style="color:var(--teal)">УТП В ОДНОЙ ФРАЗЕ</span>
+      <div class="phrase-text">«Практика с преподавателем, который знает твой курс, твой поток и твой кейс»</div>
+    </div>
+    <div class="phrase-card">
+      <span class="phrase-tag" style="color:var(--amber)">ЦЕНА</span>
+      <div class="phrase-text">«8 000 ₽ / месяц — 1 000 ₽ за занятие с преподавателем в группе до 8 человек»</div>
+    </div>
+    <div class="phrase-card" style="border-color:rgba(46,136,119,0.3)">
+      <span class="phrase-tag" style="color:var(--teal)">ЦИТАТА #1 · нет регулярности</span>
+      <div class="phrase-text">«Когда сама занимаешься — можно пропустить. Когда тебя ждут — не так легко слиться.»</div>
+      <div class="phrase-use">→ закрываем «нет регулярности»</div>
+    </div>
+    <div class="phrase-card">
+      <span class="phrase-tag" style="color:var(--muted)">ЦИТАТА #2 · платформа с записями</span>
+      <div class="phrase-text">«По записям неэффективно — нужна обратная связь от преподавателя.»</div>
+      <div class="phrase-use">→ закрываем «у нас же есть записи»</div>
+    </div>
+    <div class="phrase-card" style="border-color:var(--cream-border)">
+      <span class="phrase-tag" style="color:var(--amber)">ЦИТАТА #3 · хочу индивидуально</span>
+      <div class="phrase-text">«В группе можно на других увидеть то, что у себя не заметишь.»</div>
+      <div class="phrase-use">→ закрываем «хочу индивидуально»</div>
+    </div>
+  </div>
+
+  <div class="no-list">
+    <div class="no-title">🚫 Чего НЕ делать</div>
+    <div class="no-item"><span class="no-icon">✗</span>«Когда тебе удобно?» — даю <b>2 конкретных слота</b> на выбор</div>
+    <div class="no-item"><span class="no-icon">✗</span>«Хочешь купить?» — «Идём в ближайший поток?»</div>
+    <div class="no-item"><span class="no-icon">✗</span>Молчать после «дорого» — разбираем на слои</div>
+    <div class="no-item"><span class="no-icon">✗</span>Обещать скидку — нет скидок, есть ценность</div>
+    <div class="no-item"><span class="no-icon">✗</span>«Ты точно сдашь экзамен» — помогаем подготовиться, гарантий нет</div>
+    <div class="no-item"><span class="no-icon">✗</span>Обещать «как 1-на-1» — формат групповой, но с персональным подходом</div>
+    <div class="no-item"><span class="no-icon">✗</span>Снижать цену по первому возражению — сначала усилить ценность</div>
+    <div class="no-item"><span class="no-icon">✗</span>«Подумаю» без даты — <b>всегда фиксирую время следующего контакта</b></div>
+    <div class="no-item"><span class="no-icon">✗</span>Уходить в монолог — после каждого блока задаю вопрос клиентке и жду ответа</div>
+  </div>
+</div>
+
+<!-- ████  PAGE: ТРИГГЕРЫ  ████ -->
+<div class="page" id="page-triggers">
+  <div class="page-title">⚡ Горячие триггеры</div>
+  <p style="font-size:13px;color:var(--muted);margin-bottom:16px">3 ситуации, когда продавать проще всего</p>
+
+  <div class="trg-grid">
+    <div class="trg-card" style="border-color:rgba(232,78,27,0.25)">
+      <div class="trg-emoji">😰</div>
+      <div class="trg-num" style="color:var(--orange)">Триггер #1</div>
+      <div class="trg-title">Модуль 5–8 + экзамен</div>
+      <div class="trg-desc">Упоминает экзамен. <b>Самый сильный эмоциональный драйвер</b> — тревога «не успею», «забуду», «не сдам».</div>
+      <div class="trg-action">→ «Преподаватели YoGo — те же люди, которые знают академию изнутри. Они готовят именно к этому.»</div>
+    </div>
+    <div class="trg-card" style="border-color:var(--cream-border)">
+      <div class="trg-emoji">💸</div>
+      <div class="trg-num" style="color:var(--amber)">Триггер #2</div>
+      <div class="trg-title">Платит сторонним</div>
+      <div class="trg-desc">Ходит к Павловой, Оз, в студию. <b>Уже готова тратить на практику</b> — нужно показать, что YoGo точнее и выгоднее.</div>
+      <div class="trg-action">→ «Замени одну подписку. За те же деньги — преподаватель, который знает твой трек.»</div>
+    </div>
+    <div class="trg-card" style="border-color:rgba(46,136,119,0.25)">
+      <div class="trg-emoji">🤸</div>
+      <div class="trg-num" style="color:var(--teal)">Триггер #3</div>
+      <div class="trg-title">Называет конкретную асану</div>
+      <div class="trg-desc">Чатуранга, ширшасана, пинча, балансы — <b>конкретный запрос</b>. Закрываю обещанием тематических недель.</div>
+      <div class="trg-action">→ «У нас есть тематические недели — ровно под эту форму. Пока не встанет оптимально.»</div>
+    </div>
+  </div>
+</div>
+
+<!-- ████  PAGE: ЧЕК-ЛИСТ  ████ -->
+<div class="page" id="page-checklist">
+  <div class="page-title">✅ Чек-лист звонка</div>
+  <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Нажимай на пункты — они отмечаются. Кнопка внизу сбрасывает для нового звонка.</p>
+
+  <div class="cl-grid">
+
+    <div class="cl-section">
+      <div class="cl-title" style="color:var(--muted)">🔲 До звонка</div>
+      <div class="cl-item" onclick="toggleCL(this)"><div class="ckmark"></div>Открыла карточку студентки</div>
+      <div class="cl-item" onclick="toggleCL(this)"><div class="ckmark"></div>Проверила, была ли на пробном занятии</div>
+      <div class="cl-item" onclick="toggleCL(this)"><div class="ckmark"></div>Знаю оценку, которую поставила</div>
+      <div class="cl-item" onclick="toggleCL(this)"><div class="ckmark"></div>Готова назвать конкретику с первой фразы</div>
+    </div>
+
+    <div class="cl-section">
+      <div class="cl-title" style="color:var(--purple)">🎙 Во время звонка</div>
+      <div class="cl-item" onclick="toggleCL(this)"><div class="ckmark"></div>«Удобно пообщаться 5–10 минут?» — дождалась ответа</div>
+      <div class="cl-item" onclick="toggleCL(this)"><div class="ckmark"></div>Спросила про впечатления от пробного</div>
+      <div class="cl-item" onclick="toggleCL(this)"><div class="ckmark"></div>Сослалась на анкету занятия</div>
+      <div class="cl-item" onclick="toggleCL(this)"><div class="ckmark"></div>Записала дословные слова про боль / идеал / барьер</div>
+      <div class="cl-item" onclick="toggleCL(this)"><div class="ckmark"></div>Презентация: зеркалила её слова, не свои</div>
+      <div class="cl-item" onclick="toggleCL(this)"><div class="ckmark"></div>После каждого блока задала вопрос — дождалась ответа</div>
+      <div class="cl-item" onclick="toggleCL(this)"><div class="ckmark"></div>После закрытия — дала паузу и молчала</div>
+      <div class="cl-item" onclick="toggleCL(this)"><div class="ckmark"></div>Не снизила цену по первому «дорого»</div>
+    </div>
+
+    <div class="cl-section">
+      <div class="cl-title" style="color:var(--teal)">✔ После — если купила</div>
+      <div class="cl-item" onclick="toggleCL(this)"><div class="ckmark"></div>Слот зафиксирован (дата + время + преподаватель)</div>
+      <div class="cl-item" onclick="toggleCL(this)"><div class="ckmark"></div>Подтверждение отправлено в Телеграм</div>
+      <div class="cl-item" onclick="toggleCL(this)"><div class="ckmark"></div>В CRM: что сказала / возражение / следующий шаг</div>
+      <div class="cl-item" onclick="toggleCL(this)"><div class="ckmark"></div>Ссылка на оплату выставлена (действует до 12:00 ночи)</div>
+    </div>
+
+    <div class="cl-section">
+      <div class="cl-title" style="color:var(--orange)">⏳ После — если «подумаю»</div>
+      <div class="cl-item" onclick="toggleCL(this)"><div class="ckmark"></div>Зафиксирована конкретная дата возврата</div>
+      <div class="cl-item" onclick="toggleCL(this)"><div class="ckmark"></div>Отправлено саммари / видео о продукте</div>
+      <div class="cl-item" onclick="toggleCL(this)"><div class="ckmark"></div>Дата касания ≤ 24 часа после звонка</div>
+      <div class="cl-item" onclick="toggleCL(this)"><div class="ckmark"></div>В CRM создана задача на перезвон</div>
+      <div class="cl-item" onclick="toggleCL(this)"><div class="ckmark"></div>Записана причина «подумаю» (цена / время / формат)</div>
+    </div>
+
+  </div>
+
+  <div style="margin-top:16px;background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:18px;">
+    <div style="font-size:11px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:10px;font-family:var(--mono)">⏱ 3-часовое правило после пробного</div>
+    <div style="font-size:13.5px;line-height:1.7;color:var(--text)">
+      Звоню <b>не позже 3 часов</b> после пробного занятия. Через 24 часа конверсия падает в 2 раза.<br><br>
+      После пробного — 3 вопроса:<br>
+      <span style="color:var(--purple);font-weight:700">①</span> Что зашло? Что сейчас запомнилось?<br>
+      <span style="color:var(--orange);font-weight:700">②</span> Чего не хватило? Что хотелось бы добавить?<br>
+      <span style="color:var(--teal);font-weight:700">③</span> Попадает ли в запрос? Это про регулярную практику, о которой говорила?
+    </div>
+  </div>
+
+  <button onclick="resetCL()" style="margin-top:14px;background:var(--surface);border:1.5px solid var(--border);color:var(--text);padding:10px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;box-shadow:var(--shadow);">
+    🔄 Сбросить чек-лист для нового звонка
+  </button>
+</div>
+
+</div><!-- /main -->
+
+<div class="scroll-top" id="scrollTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</div>
+
+<script>
+  function showPage(name) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
+    document.getElementById('page-' + name).classList.add('active');
+    document.getElementById('tab-' + name).classList.add('active');
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  }
+  function toggleF(el)    { el.classList.toggle('open'); }
+  function togglePain(el) { el.classList.toggle('open'); }
+  function toggleObj(el)  { el.classList.toggle('open'); }
+  function toggleCL(el)   { el.classList.toggle('checked'); }
+  function resetCL() { document.querySelectorAll('.cl-item').forEach(el => el.classList.remove('checked')); }
+  window.addEventListener('scroll', () => {
+    const btn = document.getElementById('scrollTop');
+    btn.classList.toggle('visible', window.scrollY > 300);
+  });
+</script>
+</body>
+</html>
