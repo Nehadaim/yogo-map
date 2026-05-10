@@ -1,1054 +1,2163 @@
 <!DOCTYPE html>
-<!--
-╔══════════════════════════════════════════════════════════════════╗
-║          ИНСТРУКЦИЯ ДЛЯ РАЗРАБОТЧИКА — ИНТЕГРАЦИЯ В БИТРИКС24   ║
-╚══════════════════════════════════════════════════════════════════╝
-
-ЦЕЛЬ: встроить этот файл как вкладку в карточку контакта/сделки CRM,
-      чтобы у менеджера скрипт открывался прямо внутри карточки.
-
-ШАГИ:
-
-1. РАЗМЕСТИТЬ ФАЙЛ
-   Загрузи этот HTML-файл на любой веб-сервер с HTTPS.
-   Пример: https://your-domain.com/yogo-script.html
-   (Можно использовать Битрикс24 Static hosting или внешний хостинг)
-
-2. СОЗДАТЬ ЛОКАЛЬНОЕ ПРИЛОЖЕНИЕ В БИТРИКС24
-   Битрикс24 → Разработчикам → Другое → Локальное приложение
-   Тип: Встраиваемое приложение
-   URL обработчика: https://your-domain.com/yogo-script.html
-
-3. ДОБАВИТЬ РАЗМЕЩЕНИЕ (PLACEMENT)
-   В настройках приложения добавить placement:
-     • CRM_CONTACT_DETAIL_TAB   → вкладка в карточке контакта
-     • CRM_DEAL_DETAIL_TAB      → вкладка в карточке сделки
-     • CRM_LEAD_DETAIL_TAB      → вкладка в карточке лида
-   Название вкладки: "Скрипт YoGo"
-   Иконка: можно любую из стандартных
-
-4. ПЕРЕДАЧА ДАННЫХ ИЗ CRM В СКРИПТ (опционально)
-   Битрикс24 передаёт параметры через URL при открытии вкладки.
-   Чтобы автоматически подставлять имя клиента или модуль:
-   - Подключить Bitrix24 JS SDK: BX24.init()
-   - Получить ID сущности: BX24.placement.info()
-   - Сделать запрос: BX24.callMethod('crm.contact.get', {id: ...})
-   Документация: https://dev.1c-bitrix.ru/rest_help/
-
-5. РАЗМЕР ВИДЖЕТА
-   Вкладка CRM открывается на всю ширину контентной зоны (~800-1100px).
-   CSS в этом файле адаптирован под ширину от 320px до 1200px.
-
-6. ЕСЛИ НУЖНА АВТОРИЗАЦИЯ
-   Ограничить доступ к файлу по IP или добавить проверку токена Битрикс24.
-
-КОНТАКТ: передай этот файл разработчику — все инструкции внутри.
--->
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>YoGo — Скрипт продажи · Майнд-карта</title>
+<title>YOGO · Книга скриптов · Академия йоги</title>
 <style>
-  :root {
-    --bg: #F7F4EE;
-    --surface: #FFFFFF;
-    --surface2: #EEE8DB;
-    --border: #D5C9B5;
-    --accent: #6B8F5E;
-    --accent2: #8B6847;
-    --green: #4E7D42;
-    --yellow: #B8963A;
-    --pink: #B8735A;
-    --cyan: #4E8077;
-    --text: #2A1F12;
-    --muted: #7A6B55;
-    --radius: 14px;
-    --shadow: 0 4px 16px rgba(0,0,0,0.08);
-  }
+/* ====== TOKENS ====== */
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0}
+:root{
+  --bg:#F6F8FB;
+  --bg-2:#EEF2F7;
+  --card:#FFFFFF;
+  --line:#E5E7EB;
+  --line-2:#EEF2F6;
+  --ink:#1F2937;
+  --ink-2:#374151;
+  --muted:#6B7280;
+  --muted-2:#9CA3AF;
+  --blue:#2563EB;        --blue-h:#1D4ED8;  --blue-bg:#EFF6FF;  --blue-bd:#BFDBFE;
+  --green:#16A34A;       --green-bg:#ECFDF5; --green-bd:#BBF7D0;
+  --purple:#7C3AED;      --purple-bg:#F5F3FF; --purple-bd:#DDD6FE;
+  --sky:#0284C7;         --sky-bg:#E0F2FE;  --sky-bd:#BAE6FD;
+  --orange:#F97316;      --orange-bg:#FFF7ED; --orange-bd:#FED7AA;
+  --red:#DC2626;         --red-bg:#FEF2F2;  --red-bd:#FECACA;
+  --yellow:#CA8A04;      --yellow-bg:#FEFCE8; --yellow-bd:#FDE68A;
+  --r:8px; --r-lg:12px;
+  --shadow:0 1px 2px rgba(15,23,42,.04),0 1px 3px rgba(15,23,42,.06);
+  --shadow-lg:0 8px 24px rgba(15,23,42,.08);
+  --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,system-ui,sans-serif;
+}
+body{
+  font-family:var(--font);
+  background:var(--bg);
+  color:var(--ink);
+  font-size:16px;
+  line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+button{font-family:inherit;cursor:pointer}
+input,textarea{font-family:inherit}
+::selection{background:#DBEAFE;color:#1E3A8A}
 
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+/* ====== TOPBAR ====== */
+.topbar{
+  position:sticky;top:0;z-index:50;
+  background:linear-gradient(180deg, rgba(239,246,255,.85) 0%, rgba(245,243,255,.82) 50%, rgba(236,253,245,.78) 100%);
+  backdrop-filter:saturate(180%) blur(12px);
+  -webkit-backdrop-filter:saturate(180%) blur(12px);
+  border-bottom:1px solid var(--line);
+}
+.topbar-inner{
+  display:flex;align-items:center;justify-content:space-between;gap:24px;
+  max-width:1500px;margin:0 auto;
+  padding:18px 24px 12px;
+}
+.brand{min-width:0;flex:1}
+.brand-line{
+  display:flex;align-items:baseline;gap:10px;
+  font-size:17px;line-height:1.2;
+  white-space:nowrap;
+  overflow:hidden;
+}
+.brand-name{
+  font-weight:800;
+  letter-spacing:.04em;font-size:19px;
+  background:linear-gradient(135deg, #2563EB 0%, #7C3AED 100%);
+  -webkit-background-clip:text;
+  background-clip:text;
+  -webkit-text-fill-color:transparent;
+  color:transparent;
+}
+.brand-sep{color:#7C3AED;font-weight:600;opacity:.5}
+.brand-manifest{
+  font-weight:500;color:#1F2937;
+  letter-spacing:-.005em;
+  font-size:16px;
+  position:relative;
+}
+.brand-manifest::after{
+  content:"";
+  position:absolute;left:0;right:0;bottom:-3px;
+  height:2px;
+  background:linear-gradient(90deg, transparent 0%, rgba(124,58,237,.20) 12%, rgba(37,99,235,.30) 50%, rgba(22,163,74,.20) 88%, transparent 100%);
+  border-radius:1px;
+}
+.quick-pills{display:flex;gap:6px;flex-shrink:0}
+.pill{
+  border:1px solid var(--blue-bd);
+  background:var(--blue-bg);
+  color:var(--blue);
+  padding:7px 12px;
+  border-radius:999px;
+  font-size:12.5px;font-weight:600;
+  transition:.15s ease;
+  display:inline-flex;align-items:center;gap:6px;
+}
+.pill:hover{background:var(--blue);color:#fff;border-color:var(--blue)}
+.pill.warn{color:var(--red);border-color:var(--red-bd);background:var(--red-bg)}
+.pill.warn:hover{background:var(--red);color:#fff;border-color:var(--red)}
+.pill.success{color:var(--green);border-color:var(--green-bd);background:var(--green-bg)}
+.pill.success:hover{background:var(--green);color:#fff;border-color:var(--green)}
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-    min-height: 100vh;
-  }
+/* Tabs */
+nav.tabs{
+  display:flex;gap:2px;
+  max-width:1500px;margin:0 auto;
+  padding:0 24px;
+  overflow-x:auto;scrollbar-width:none;
+}
+nav.tabs::-webkit-scrollbar{display:none}
+.tab{
+  flex-shrink:0;
+  border:none;background:transparent;
+  padding:10px 16px;
+  border-radius:8px 8px 0 0;
+  color:var(--muted);
+  font-size:14px;font-weight:500;
+  border-bottom:2px solid transparent;
+  transition:.15s ease;
+  font-family:inherit;
+}
+.tab:hover{color:var(--ink);background:rgba(0,0,0,.02)}
+.tab.active{font-weight:600}
+.tab-num{
+  display:inline-block;
+  background:var(--bg-2);
+  color:var(--muted);
+  font-size:11px;
+  padding:1px 7px;
+  border-radius:4px;
+  margin-right:6px;
+  font-weight:700;
+  font-variant-numeric:tabular-nums;
+}
 
-  /* ── HEADER ── */
-  .header {
-    background: #FFFFFF;
-    border-bottom: 2px solid var(--border);
-    padding: 18px 32px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-  }
-  .header-left { display: flex; align-items: center; gap: 16px; }
-  .logo {
-    background: linear-gradient(135deg, #6B8F5E, #8B6847);
-    color: #FFFFFF;
-    font-weight: 800;
-    font-size: 22px;
-    padding: 6px 18px;
-    border-radius: 10px;
-    letter-spacing: 1px;
-  }
-  .header h1 { font-size: 15px; font-weight: 500; color: var(--muted); }
-  .header h1 span { color: var(--text); font-weight: 700; }
-  .badge {
-    background: #EEE8DB;
-    border: 1px solid var(--border);
-    color: var(--accent2);
-    font-size: 12px;
-    padding: 4px 14px;
-    border-radius: 20px;
-    font-weight: 700;
-  }
+/* Per-section tab colors */
+.tab[data-color="blue"] .tab-num{background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-bd)}
+.tab[data-color="blue"]:hover{color:var(--blue);background:var(--blue-bg)}
+.tab[data-color="blue"].active{color:var(--blue);border-bottom-color:var(--blue)}
+.tab[data-color="blue"].active .tab-num{background:var(--blue);color:#fff;border-color:var(--blue)}
 
-  /* ── NAV TABS ── */
-  .nav-tabs {
-    display: flex;
-    gap: 4px;
-    padding: 14px 32px 0;
-    border-bottom: 2px solid var(--border);
-    background: #FFFFFF;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-  .nav-tabs::-webkit-scrollbar { display: none; }
-  .tab {
-    padding: 10px 18px 12px;
-    border-radius: 10px 10px 0 0;
-    border: 1px solid transparent;
-    border-bottom: none;
-    cursor: pointer;
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--muted);
-    background: transparent;
-    transition: all .2s;
-    white-space: nowrap;
-    display: flex;
-    align-items: center;
-    gap: 7px;
-  }
-  .tab:hover { color: var(--text); background: var(--surface2); }
-  .tab.active {
-    color: var(--text);
-    background: var(--bg);
-    border-color: var(--border);
-    margin-bottom: -2px;
-    padding-bottom: 14px;
-  }
-  .tab-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.tab[data-color="green"] .tab-num{background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd)}
+.tab[data-color="green"]:hover{color:var(--green);background:var(--green-bg)}
+.tab[data-color="green"].active{color:var(--green);border-bottom-color:var(--green)}
+.tab[data-color="green"].active .tab-num{background:var(--green);color:#fff;border-color:var(--green)}
 
-  /* ── MAIN ── */
-  .main { padding: 28px 32px 48px; max-width: 900px; }
-  .page { display: none; }
-  .page.active { display: block; }
+.tab[data-color="orange"] .tab-num{background:var(--orange-bg);color:var(--orange);border:1px solid var(--orange-bd)}
+.tab[data-color="orange"]:hover{color:var(--orange);background:var(--orange-bg)}
+.tab[data-color="orange"].active{color:var(--orange);border-bottom-color:var(--orange)}
+.tab[data-color="orange"].active .tab-num{background:var(--orange);color:#fff;border-color:var(--orange)}
 
-  /* ── PAGE TITLE ── */
-  .page-title {
-    font-size: 20px;
-    font-weight: 800;
-    margin-bottom: 20px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    color: var(--text);
-  }
+.tab[data-color="purple"] .tab-num{background:var(--purple-bg);color:var(--purple);border:1px solid var(--purple-bd)}
+.tab[data-color="purple"]:hover{color:var(--purple);background:var(--purple-bg)}
+.tab[data-color="purple"].active{color:var(--purple);border-bottom-color:var(--purple)}
+.tab[data-color="purple"].active .tab-num{background:var(--purple);color:#fff;border-color:var(--purple)}
 
-  /* ── FUNNEL STEPS ── */
-  .funnel-steps { display: flex; flex-direction: column; gap: 6px; }
+.tab[data-color="red"]:hover{color:var(--red);background:var(--red-bg)}
+.tab[data-color="red"].active{color:var(--red);border-bottom-color:var(--red)}
 
-  .funnel-step {
-    display: flex;
-    align-items: flex-start;
-    gap: 14px;
-    background: var(--surface);
-    border: 1.5px solid var(--border);
-    border-radius: var(--radius);
-    padding: 16px 20px;
-    cursor: pointer;
-    transition: all .2s;
-  }
-  .funnel-step:hover { border-color: var(--accent); box-shadow: var(--shadow); }
-  .funnel-step.expanded { border-color: var(--accent); background: #FDFCF9; }
+.tab[data-color="sky"]:hover{color:var(--sky);background:var(--sky-bg)}
+.tab[data-color="sky"].active{color:var(--sky);border-bottom-color:var(--sky)}
 
-  .step-num {
-    min-width: 34px; height: 34px;
-    border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-weight: 800; font-size: 14px;
-    flex-shrink: 0; margin-top: 1px;
-  }
-  .step-body { flex: 1; }
-  .step-title { font-weight: 700; font-size: 15px; margin-bottom: 2px; color: var(--text); }
-  .step-sub { font-size: 12px; color: var(--muted); }
-  .step-detail {
-    display: none;
-    margin-top: 14px;
-    padding-top: 14px;
-    border-top: 1px solid var(--border);
-  }
-  .funnel-step.expanded .step-detail { display: block; }
-  .step-chevron { color: var(--muted); font-size: 18px; transition: transform .2s; flex-shrink: 0; margin-top: 6px; }
-  .funnel-step.expanded .step-chevron { transform: rotate(180deg); }
+/* Logic tab gets a compass dot since it has no number */
+.tab[data-color="blue"][data-tab="logic"]::before{
+  content:"";
+  display:inline-block;
+  width:8px;height:8px;border-radius:50%;
+  background:linear-gradient(135deg,#2563EB,#7C3AED);
+  margin-right:8px;
+  vertical-align:middle;
+  box-shadow:0 0 0 3px rgba(37,99,235,.12);
+}
 
-  /* ── SCRIPT BOXES ── */
-  .script-box {
-    background: #F5F1E8;
-    border: 1px solid #D5C9B5;
-    border-left: 4px solid var(--accent);
-    border-radius: 10px;
-    padding: 14px 16px;
-    font-size: 13.5px;
-    line-height: 1.7;
-    margin-top: 10px;
-    color: var(--text);
-  }
-  .script-box .label {
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-    color: var(--accent);
-    margin-bottom: 8px;
-    display: block;
-  }
-  .script-box.brown { border-left-color: var(--accent2); }
-  .script-box.brown .label { color: var(--accent2); }
-  .script-box.yellow { border-left-color: var(--yellow); }
-  .script-box.yellow .label { color: var(--yellow); }
-  .script-box.pink { border-left-color: var(--pink); }
-  .script-box.pink .label { color: var(--pink); }
-  .script-box.cyan { border-left-color: var(--cyan); }
-  .script-box.cyan .label { color: var(--cyan); }
+/* ====== LAYOUT ====== */
+main{
+  max-width:1500px;margin:0 auto;
+  padding:24px 24px 80px;
+  display:grid;
+  grid-template-columns:1fr 320px;
+  gap:24px;
+  align-items:start;
+}
+@media(max-width:1080px){
+  main{grid-template-columns:1fr}
+  aside.sidebar{order:2;position:static;max-height:none}
+}
+@media(max-width:760px){
+  main{padding:16px 14px 60px}
+  .topbar-inner{padding:14px 14px 10px;flex-direction:column;align-items:stretch;gap:10px}
+  .brand-line{white-space:normal}
+  .brand-manifest{font-size:14px}
+  nav.tabs{padding:0 12px}
+}
 
-  .self-note {
-    font-size: 11.5px;
-    color: var(--muted);
-    font-style: italic;
-    margin-top: 6px;
-    padding: 6px 10px;
-    background: var(--surface2);
-    border-radius: 7px;
-    border-left: 3px solid var(--border);
-  }
-  .self-note::before { content: "↳ "; font-style: normal; }
+/* ====== PANEL / SECTIONS ====== */
+.panel{display:none}
+.panel.active{display:block;animation:fade .18s ease}
+@keyframes fade{from{opacity:0;transform:translateY(2px)}to{opacity:1;transform:none}}
 
-  .tip {
-    font-size: 12.5px;
-    color: var(--accent2);
-    margin-top: 10px;
-    padding: 8px 12px;
-    background: #F5EDE3;
-    border-radius: 8px;
-    border-left: 3px solid var(--accent2);
-  }
-  .tip b { color: var(--accent2); }
+.panel-head{
+  display:flex;align-items:flex-start;justify-content:space-between;
+  gap:16px;flex-wrap:wrap;
+  margin-bottom:18px;
+}
+.panel-head h2{
+  margin:0;font-size:24px;font-weight:700;
+  letter-spacing:-.012em;color:var(--ink);
+}
+.panel-head .lead{
+  margin:4px 0 0;color:var(--muted);font-size:14.5px;
+}
+.section-meta{
+  display:inline-flex;gap:6px;align-items:center;
+  background:var(--card);padding:6px 10px;border-radius:6px;
+  border:1px solid var(--line);
+  font-size:12px;color:var(--muted);
+}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--blue)}
 
-  /* ── RESPONSE GRID ── */
-  .resp-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-    margin-top: 12px;
-  }
-  .resp-card {
-    border-radius: 10px;
-    padding: 10px 14px;
-    font-size: 13px;
-    border: 1px solid;
-  }
+/* ====== STEP CARD ====== */
+.step{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:var(--r-lg);
+  padding:20px 22px;
+  margin-bottom:14px;
+  box-shadow:var(--shadow);
+}
+.step-head{
+  display:flex;align-items:center;gap:10px;
+  margin-bottom:6px;flex-wrap:wrap;
+}
+.step-id{
+  background:var(--bg-2);color:var(--ink-2);
+  font-size:11px;font-weight:700;
+  padding:3px 8px;border-radius:5px;
+  letter-spacing:.04em;text-transform:uppercase;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+.step-title{
+  margin:0;font-size:17px;font-weight:600;
+  letter-spacing:-.005em;color:var(--ink);
+}
+.step-goal{
+  margin:0 0 14px;
+  color:var(--muted);font-size:13.5px;
+  display:flex;align-items:center;gap:6px;
+}
+.step-goal::before{content:"🎯";font-style:normal;opacity:.7}
 
-  /* ── PAINS ── */
-  .pains-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
-    gap: 12px;
-  }
-  .pain-card {
-    background: var(--surface);
-    border: 1.5px solid var(--border);
-    border-radius: var(--radius);
-    overflow: hidden;
-    cursor: pointer;
-    transition: all .2s;
-  }
-  .pain-card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: var(--shadow); }
-  .pain-header { padding: 14px 18px; display: flex; align-items: flex-start; gap: 12px; }
-  .pain-icon { font-size: 20px; flex-shrink: 0; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; border-radius: 10px; }
-  .pain-title { font-size: 14px; font-weight: 700; line-height: 1.4; color: var(--text); }
-  .pain-freq { font-size: 11px; margin-top: 3px; font-weight: 600; padding: 2px 8px; border-radius: 20px; display: inline-block; }
-  .pain-body { display: none; padding: 0 18px 16px; border-top: 1px solid var(--border); padding-top: 12px; }
-  .pain-card.open .pain-body { display: block; }
-  .quote-chip {
-    background: var(--surface2);
-    border-left: 3px solid;
-    border-radius: 0 8px 8px 0;
-    padding: 8px 12px;
-    font-size: 12.5px;
-    font-style: italic;
-    color: var(--muted);
-    margin-bottom: 8px;
-    line-height: 1.5;
-  }
-  .close-line {
-    font-size: 12.5px;
-    color: var(--green);
-    margin-top: 10px;
-    padding: 8px 12px;
-    background: #EDF5EA;
-    border-radius: 8px;
-    border: 1px solid #C5DCC0;
-  }
-  .close-line::before { content: "✓ "; font-weight: 700; }
+/* ====== INFO BLOCKS ====== */
+.block{
+  border:1px solid;
+  border-radius:var(--r);
+  padding:14px 16px;
+  margin:10px 0;
+}
+.block-head{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:12px;margin-bottom:8px;
+}
+.badge{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:11px;font-weight:700;
+  letter-spacing:.05em;text-transform:uppercase;
+  padding:3px 8px;border-radius:5px;
+}
+.block.speak{background:var(--green-bg);border-color:var(--green-bd)}
+.block.speak .badge{background:var(--green);color:#fff}
+.block.speak .body{color:#052E16;font-size:16px;line-height:1.55;font-weight:500;white-space:pre-line}
+.block.ask{background:var(--purple-bg);border-color:var(--purple-bd)}
+.block.ask .badge{background:var(--purple);color:#fff}
+.block.ask .body{color:#2E1065;font-size:16px;line-height:1.55;font-weight:500;white-space:pre-line}
+.block.listen{background:var(--sky-bg);border-color:var(--sky-bd)}
+.block.listen .badge{background:var(--sky);color:#fff}
+.block.listen .body{color:#0C4A6E;font-size:14.5px;line-height:1.5}
+.block.obj{background:var(--orange-bg);border-color:var(--orange-bd)}
+.block.obj .badge{background:var(--orange);color:#fff}
+.block.obj .body{color:#7C2D12;font-size:15px;line-height:1.55;white-space:pre-line}
+.block.forbid{background:var(--red-bg);border-color:var(--red-bd)}
+.block.forbid .badge{background:var(--red);color:#fff}
+.block.forbid .body{color:#7F1D1D;font-size:14.5px;line-height:1.5}
+.block.next{background:var(--blue-bg);border-color:var(--blue-bd)}
+.block.next .badge{background:var(--blue);color:#fff}
+.block.next .body{color:#1E3A8A;font-size:14px;line-height:1.5}
+.block.warn{background:var(--yellow-bg);border-color:var(--yellow-bd)}
+.block.warn .badge{background:var(--yellow);color:#fff}
+.block.warn .body{color:#713F12;font-size:14px;line-height:1.5}
 
-  /* ── OBJECTIONS ── */
-  .obj-list { display: flex; flex-direction: column; gap: 8px; }
-  .obj-item {
-    background: var(--surface);
-    border: 1.5px solid var(--border);
-    border-radius: var(--radius);
-    overflow: hidden;
-    cursor: pointer;
-    transition: border-color .2s;
-  }
-  .obj-item:hover, .obj-item.open { border-color: var(--pink); }
-  .obj-trigger { padding: 15px 20px; display: flex; align-items: center; gap: 14px; }
-  .obj-num {
-    width: 30px; height: 30px;
-    background: #F5EDE3;
-    border: 1px solid #D5B898;
-    border-radius: 8px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 13px; font-weight: 800;
-    color: var(--pink);
-    flex-shrink: 0;
-  }
-  .obj-title { font-weight: 700; font-size: 15px; flex: 1; color: var(--text); }
-  .obj-body { display: none; padding: 0 20px 18px; border-top: 1px solid var(--border); }
-  .obj-item.open .obj-body { display: block; padding-top: 16px; }
-  .parr-step { display: flex; gap: 10px; margin-bottom: 10px; align-items: flex-start; }
-  .parr-label {
-    min-width: 28px; height: 28px;
-    border-radius: 8px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 10px; font-weight: 800;
-    letter-spacing: 0.5px; flex-shrink: 0;
-  }
-  .parr-text { font-size: 13.5px; line-height: 1.65; padding-top: 4px; color: var(--text); }
+.copy{
+  display:inline-flex;align-items:center;gap:5px;
+  background:#fff;color:var(--ink-2);
+  border:1px solid var(--line);
+  font-size:11.5px;font-weight:500;
+  padding:4px 9px;border-radius:6px;
+  transition:.12s;
+}
+.copy:hover{border-color:var(--blue);color:var(--blue)}
+.copy.copied{background:var(--green);color:#fff;border-color:var(--green)}
 
-  /* ── CHECKLIST ── */
-  .checklist-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  .check-section { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 20px; }
-  .check-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
-  .check-item {
-    display: flex; align-items: flex-start; gap: 10px;
-    padding: 8px 0; border-bottom: 1px solid var(--border);
-    font-size: 13.5px; line-height: 1.5; cursor: pointer;
-    transition: color .15s; color: var(--text);
-  }
-  .check-item:last-child { border-bottom: none; }
-  .check-item:hover { color: var(--accent); }
-  .check-item.checked { color: var(--muted); text-decoration: line-through; }
-  .check-item.checked .checkmark { background: var(--accent); border-color: var(--accent); }
-  .check-item.checked .checkmark::after { display: block; }
-  .checkmark {
-    width: 18px; height: 18px; min-width: 18px;
-    border: 2px solid var(--border); border-radius: 5px;
-    margin-top: 1px; position: relative; transition: all .15s;
-  }
-  .checkmark::after { content: "✓"; display: none; position: absolute; top: -2px; left: 1px; font-size: 12px; color: #fff; font-weight: 800; }
+/* ====== BRANCHES ====== */
+.branches{
+  display:flex;flex-wrap:wrap;gap:8px;
+  margin-top:14px;padding-top:14px;
+  border-top:1px dashed var(--line);
+}
+.branches-label{
+  width:100%;font-size:11px;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.06em;
+  font-weight:700;margin-bottom:4px;
+}
+.branch-btn{
+  display:inline-flex;align-items:center;gap:6px;
+  background:var(--card);border:1px solid var(--line);
+  color:var(--ink-2);
+  padding:7px 13px;border-radius:7px;
+  font-size:13px;font-weight:500;
+  transition:.12s;
+}
+.branch-btn:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-bg)}
+.branch-btn.yes{border-color:#BBF7D0;background:#F0FDF4;color:#15803D}
+.branch-btn.yes:hover{background:#DCFCE7;border-color:var(--green)}
+.branch-btn.no{border-color:#FECACA;background:#FEF2F2;color:#B91C1C}
+.branch-btn.no:hover{background:#FEE2E2;border-color:var(--red)}
+.branch-btn.maybe{border-color:#FED7AA;background:#FFF7ED;color:#C2410C}
+.branch-btn.maybe:hover{background:#FFEDD5;border-color:var(--orange)}
+.branch-btn.active{box-shadow:0 0 0 3px rgba(37,99,235,.18)}
 
-  /* ── PHRASES ── */
-  .phrases-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; }
-  .phrase-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 18px; }
-  .phrase-tag { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 10px; display: block; }
-  .phrase-text { font-size: 14px; line-height: 1.65; font-style: italic; color: var(--text); }
-  .phrase-use { font-size: 12px; color: var(--muted); margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.branch-content{
+  display:none;
+  margin-top:14px;padding:14px 16px;
+  background:var(--bg-2);
+  border-radius:var(--r);
+  border-left:3px solid var(--blue);
+}
+.branch-content.open{display:block;animation:fade .18s}
+.branch-title{
+  font-weight:600;color:var(--ink);
+  font-size:14px;margin:0 0 8px;
+  display:flex;align-items:center;gap:8px;
+}
+.branch-tag{
+  font-size:11px;font-weight:700;
+  letter-spacing:.05em;text-transform:uppercase;
+  padding:2px 7px;border-radius:4px;
+  background:var(--bg-2);color:var(--muted);
+}
+.branch-tag.green{background:var(--green-bg);color:var(--green)}
+.branch-tag.gray{background:var(--bg-2);color:var(--muted)}
+.branch-tag.red{background:var(--red-bg);color:var(--red)}
 
-  .no-list { background: var(--surface); border: 1.5px solid #DDB8A8; border-radius: var(--radius); padding: 20px; margin-top: 16px; }
-  .no-list-title { font-size: 12px; font-weight: 700; color: var(--pink); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-  .no-item { display: flex; gap: 10px; padding: 7px 0; font-size: 13.5px; border-bottom: 1px solid var(--border); color: var(--text); }
-  .no-item:last-child { border-bottom: none; }
-  .no-icon { color: var(--pink); flex-shrink: 0; font-weight: 700; }
+/* ====== COHORT SELECTOR ====== */
+.cohort-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:14px;
+  margin:14px 0;
+}
+@media(max-width:760px){.cohort-grid{grid-template-columns:1fr}}
+.cohort-card{
+  background:#fff;border:2px solid var(--line);
+  border-radius:var(--r-lg);
+  padding:18px;
+  cursor:pointer;
+  transition:.15s;
+  display:flex;flex-direction:column;gap:10px;
+}
+.cohort-card:hover{border-color:var(--blue);transform:translateY(-1px);box-shadow:var(--shadow-lg)}
+.cohort-card.selected{border-color:var(--blue);background:var(--blue-bg)}
+.cohort-card[data-cohort="2"].selected{border-color:var(--green);background:var(--green-bg)}
+.cohort-tag{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:11px;font-weight:700;
+  letter-spacing:.05em;text-transform:uppercase;
+  color:var(--blue);
+}
+.cohort-card[data-cohort="2"] .cohort-tag{color:var(--green)}
+.cohort-card h3{
+  margin:0;font-size:18px;font-weight:700;
+  letter-spacing:-.01em;color:var(--ink);
+}
+.cohort-card .summary{
+  margin:0;color:var(--muted);font-size:14px;line-height:1.45;
+}
+.cohort-card ul{margin:8px 0 0;padding:0;list-style:none;font-size:13.5px;color:var(--ink-2)}
+.cohort-card ul li{padding:3px 0;display:flex;gap:8px}
+.cohort-card ul li::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--blue);margin-top:8px;flex-shrink:0}
+.cohort-card[data-cohort="2"] ul li::before{background:var(--green)}
+.cohort-card .pick{
+  margin-top:auto;
+  background:var(--blue);color:#fff;
+  border:none;border-radius:7px;
+  padding:9px 14px;font-size:13.5px;font-weight:600;
+}
+.cohort-card[data-cohort="2"] .pick{background:var(--green)}
+.cohort-card.selected .pick{background:var(--ink)}
 
-  /* ── TRIGGERS ── */
-  .triggers-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-  .trigger-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 20px; text-align: center; }
-  .trigger-emoji { font-size: 34px; margin-bottom: 10px; }
-  .trigger-num { font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
-  .trigger-title { font-size: 15px; font-weight: 700; margin-bottom: 8px; color: var(--text); }
-  .trigger-desc { font-size: 13px; color: var(--muted); line-height: 1.55; }
-  .trigger-action { margin-top: 12px; padding: 8px 12px; background: #EDF5EA; border: 1px solid #C5DCC0; border-radius: 8px; font-size: 12.5px; color: var(--green); }
+/* Cohort-conditional reveal */
+.cohort-block{
+  display:none;
+  border:1px solid var(--line);
+  border-left:3px solid var(--blue);
+  border-radius:var(--r-lg);
+  padding:18px 20px;margin:14px 0;
+  background:#fff;
+  box-shadow:var(--shadow);
+}
+.cohort-block.show{display:block;animation:fade .2s}
+.cohort-block[data-for="2"]{border-left-color:var(--green)}
+.cohort-block-head{
+  display:flex;align-items:center;gap:10px;margin-bottom:10px;
+}
+.cohort-block-head h4{margin:0;font-size:16px;font-weight:600}
+.cohort-hint{
+  font-size:13px;color:var(--muted);
+  background:var(--bg-2);
+  padding:10px 14px;border-radius:8px;
+  margin:14px 0;
+  text-align:center;
+}
 
-  @media (max-width: 768px) {
-    .main { padding: 18px 16px 48px; }
-    .nav-tabs { padding: 10px 16px 0; }
-    .header { padding: 14px 16px; }
-    .checklist-grid { grid-template-columns: 1fr; }
-    .triggers-row { grid-template-columns: 1fr; }
-    .resp-grid { grid-template-columns: 1fr; }
-  }
 
-  .scroll-top {
-    position: fixed; bottom: 24px; right: 24px;
-    width: 42px; height: 42px; background: var(--accent); border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    cursor: pointer; font-size: 20px; color: white;
-    box-shadow: var(--shadow); opacity: 0; transition: opacity .3s;
-    pointer-events: none; z-index: 200;
-  }
-  .scroll-top.visible { opacity: 1; pointer-events: auto; }
+/* ====== OBJECTIONS ====== */
+.obj-filter{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.obj-card{
+  background:#fff;border:1px solid var(--line);
+  border-radius:var(--r-lg);
+  margin-bottom:10px;overflow:hidden;
+  box-shadow:var(--shadow);
+}
+.obj-toggle{
+  width:100%;background:transparent;border:none;text-align:left;
+  padding:14px 18px;
+  display:flex;align-items:center;gap:12px;
+  font-size:15px;color:var(--ink);font-weight:500;
+}
+.obj-toggle:hover{background:var(--orange-bg)}
+.obj-toggle .obj-q{flex:1;line-height:1.4}
+.obj-toggle .obj-q::before{content:"« ";color:var(--muted-2)}
+.obj-toggle .obj-q::after{content:" »";color:var(--muted-2)}
+.obj-cat{
+  font-size:10.5px;font-weight:700;
+  letter-spacing:.05em;text-transform:uppercase;
+  background:var(--orange-bg);color:var(--orange);
+  padding:3px 8px;border-radius:5px;flex-shrink:0;
+  border:1px solid var(--orange-bd);
+}
+.obj-arrow{transition:transform .2s;color:var(--muted-2)}
+.obj-toggle[aria-expanded="true"] .obj-arrow{transform:rotate(180deg)}
+.obj-body{display:none;padding:0 18px 16px;border-top:1px solid var(--line-2);padding-top:14px}
+.obj-body.open{display:block}
+
+.tag{
+  display:inline-flex;align-items:center;gap:6px;
+  height:28px;padding:0 11px;
+  border:1px solid var(--line);background:#fff;
+  border-radius:999px;
+  font-size:12.5px;color:var(--ink-2);
+  cursor:pointer;transition:.15s;
+  font-family:inherit;
+}
+.tag:hover{border-color:var(--blue);color:var(--blue)}
+.tag.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+
+/* ====== SIDEBAR ====== */
+aside.sidebar{
+  position:sticky;top:108px;
+  align-self:start;
+  display:flex;flex-direction:column;gap:14px;
+  max-height:calc(100vh - 130px);
+  overflow-y:auto;
+  padding-right:2px;
+}
+.r-card{
+  background:#fff;border:1px solid var(--line);
+  border-radius:var(--r-lg);
+  padding:14px 16px;
+  box-shadow:var(--shadow);
+}
+.r-card h3{
+  margin:0 0 10px;font-size:13px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
+  display:flex;align-items:center;gap:6px;
+}
+.r-goal{font-size:14.5px;color:var(--ink);font-weight:500;line-height:1.5}
+
+/* SMART NOTES */
+.notes-card h3{display:flex;align-items:center;gap:6px}
+.notes-count{
+  margin-left:auto;
+  background:var(--blue-bg);color:var(--blue);
+  font-size:11px;font-weight:700;
+  padding:2px 7px;border-radius:5px;
+  border:1px solid var(--blue-bd);
+  font-variant-numeric:tabular-nums;
+}
+.note-input{
+  width:100%;height:38px;
+  border:1px solid var(--line);
+  border-radius:var(--r);
+  padding:0 12px;
+  font-size:13.5px;
+  outline:none;
+  background:#fff;
+  color:var(--ink);
+  margin-bottom:8px;
+  transition:border-color .12s,box-shadow .12s;
+}
+.note-input::placeholder{color:var(--muted-2)}
+.note-input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+.notes-search-wrap{position:relative;margin-bottom:10px}
+.notes-search-wrap svg{
+  position:absolute;left:10px;top:50%;transform:translateY(-50%);
+  color:var(--muted-2);
+  pointer-events:none;
+}
+.notes-search-wrap input{
+  width:100%;height:30px;
+  padding:0 10px 0 30px;
+  border:1px solid var(--line);
+  border-radius:6px;
+  background:var(--bg);
+  font-size:12.5px;color:var(--ink);
+  outline:none;
+}
+.notes-search-wrap input:focus{
+  border-color:var(--blue);background:#fff;
+  box-shadow:0 0 0 2px rgba(37,99,235,.10);
+}
+.notes-list{
+  display:flex;flex-direction:column;gap:6px;
+  max-height:340px;overflow-y:auto;
+  margin:0 -2px;padding:1px 2px;
+}
+.notes-list::-webkit-scrollbar{width:6px}
+.notes-list::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+.notes-empty{
+  text-align:center;font-size:12.5px;color:var(--muted-2);
+  padding:14px 8px;font-style:italic;
+}
+.note-card{
+  background:#fff;border:1px solid var(--line);
+  border-radius:var(--r);
+  padding:8px 28px 8px 10px;
+  position:relative;
+  animation:noteFade .18s ease;
+}
+.note-card:hover{border-color:var(--blue-bd);box-shadow:0 1px 3px rgba(15,23,42,.05)}
+@keyframes noteFade{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
+.note-head{
+  display:flex;align-items:baseline;justify-content:space-between;gap:8px;
+  margin-bottom:2px;
+}
+.note-name{
+  font-size:13px;font-weight:600;color:var(--ink);
+  line-height:1.3;flex:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.note-name.empty{color:var(--muted-2);font-weight:500;font-style:italic}
+.note-time{
+  flex-shrink:0;font-size:10.5px;color:var(--muted);
+  font-variant-numeric:tabular-nums;letter-spacing:.01em;
+}
+.note-text{
+  font-size:13px;color:var(--ink-2);line-height:1.4;
+  word-break:break-word;white-space:pre-wrap;
+}
+.note-del{
+  position:absolute;top:5px;right:5px;
+  width:20px;height:20px;
+  border:none;background:transparent;
+  color:var(--muted-2);border-radius:4px;cursor:pointer;
+  display:none;align-items:center;justify-content:center;
+  font-size:16px;line-height:1;padding:0;font-family:inherit;
+}
+.note-card:hover .note-del,.note-card:focus-within .note-del{display:inline-flex}
+.note-del:hover{background:var(--red-bg);color:var(--red)}
+.notes-meta{
+  display:flex;justify-content:space-between;align-items:center;
+  margin-top:8px;font-size:11px;color:var(--muted);
+}
+.notes-meta button{
+  background:none;border:none;color:var(--muted);
+  font-size:11px;cursor:pointer;font-family:inherit;padding:0;
+}
+.notes-meta button:hover{color:var(--red);text-decoration:underline}
+mark.note-hl{background:#FEF3C7;color:inherit;padding:0 1px;border-radius:2px}
+
+/* ====== MEANINGS GRID ====== */
+.meanings{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:12px;
+}
+.meaning{
+  background:var(--green-bg);
+  border:1px solid var(--green-bd);
+  border-radius:var(--r);
+  padding:14px 16px;
+  color:#15803D;font-size:14px;line-height:1.4;font-weight:500;
+  display:flex;align-items:flex-start;gap:8px;
+}
+.meaning::before{content:"✓";color:var(--green);font-weight:700;margin-top:1px}
+
+/* RULES grid */
+.rules-grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:12px;
+}
+.rule{
+  background:#fff;border:1px solid var(--line);
+  border-radius:var(--r-lg);
+  padding:16px;
+}
+.rule .num{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:26px;height:26px;border-radius:7px;
+  background:var(--blue-bg);color:var(--blue);
+  font-weight:700;font-size:13px;margin-bottom:8px;
+}
+.rule h4{margin:0 0 4px;font-size:14.5px;font-weight:600;color:var(--ink)}
+.rule p{margin:0;font-size:13px;color:var(--muted);line-height:1.5}
+
+/* SCENARIOS GRID on logic */
+.scenarios-grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+  gap:12px;margin:18px 0 8px;
+}
+.sc{
+  background:#fff;border:1px solid var(--line);
+  border-radius:var(--r-lg);
+  padding:16px;cursor:pointer;
+  transition:.15s;
+  display:flex;flex-direction:column;gap:6px;
+}
+.sc:hover{border-color:var(--blue);transform:translateY(-1px);box-shadow:var(--shadow-lg)}
+.sc-num{font-size:11px;color:var(--blue);font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.sc h4{margin:0;font-size:15px;font-weight:600;color:var(--ink)}
+.sc p{margin:0;font-size:13px;color:var(--muted);line-height:1.45}
+.sc .arrow{color:var(--blue);margin-top:auto;font-size:14px}
+
+/* STOP LIST */
+.stoplist{
+  background:var(--red-bg);border:1px solid var(--red-bd);
+  border-radius:var(--r-lg);padding:18px 20px;
+}
+.stoplist h3{margin:0 0 12px;color:var(--red);font-size:16px;font-weight:700}
+.stoplist ul{margin:0;padding:0;list-style:none}
+.stoplist li{
+  color:#7F1D1D;padding:6px 0;font-size:14px;line-height:1.4;
+}
+.stoplist li::before{content:"✕  ";color:var(--red);font-weight:700}
+
+/* ====== TOAST ====== */
+.toast{
+  position:fixed;bottom:24px;left:50%;
+  transform:translateX(-50%) translateY(20px);
+  background:var(--ink);color:#fff;
+  padding:10px 18px;border-radius:8px;
+  font-size:13.5px;font-weight:500;
+  box-shadow:var(--shadow-lg);
+  opacity:0;pointer-events:none;
+  transition:.2s;z-index:200;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* Utils */
+.divider{height:1px;background:var(--line-2);margin:18px 0}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+@media(max-width:760px){
+  .panel-head h2{font-size:20px}
+  .step{padding:16px}
+  .block .body{font-size:15px}
+  .brand-line{font-size:14px;flex-direction:column;gap:0;align-items:flex-start}
+  .brand-name{font-size:15px}
+  .brand-manifest{font-size:13.5px;white-space:normal}
+}
 </style>
 </head>
 <body>
 
-<!-- HEADER -->
-<div class="header">
-  <div class="header-left">
-    <div class="logo">YoGo</div>
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="brand-line">
+        <span class="brand-name">YOGO</span>
+        <span class="brand-sep">:</span>
+        <span class="brand-manifest">Место, где практика перестаёт держаться только на силе воли</span>
+      </div>
+    </div>
+    <div class="quick-pills">
+      <button class="pill" data-jump="logic">Главная логика</button>
+      <button class="pill warn" data-jump="forbidden">Чего нельзя</button>
+      <button class="pill success" data-jump="meanings">Смыслы YOGO</button>
+    </div>
+  </div>
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-color="blue" data-tab="logic">Главная логика</button>
+    <button class="tab" data-color="green" data-tab="invitation"><span class="tab-num">1</span>Приглашение на пробное</button>
+    <button class="tab" data-color="orange" data-tab="noshow"><span class="tab-num">2</span>Не пришла на пробное</button>
+    <button class="tab" data-color="purple" data-tab="sale"><span class="tab-num">3</span>Продажа после пробного</button>
+    <button class="tab" data-color="red" data-tab="objections">Возражения</button>
+    <button class="tab" data-color="sky" data-tab="meanings">Смыслы и стоп-лист</button>
+  </nav>
+</header>
+
+<main>
+<div class="content">
+
+<!-- ============================ TAB: ГЛАВНАЯ ЛОГИКА ============================ -->
+<section class="panel active" id="panel-logic" data-section="logic">
+  <div class="panel-head">
     <div>
-      <h1><span>Скрипт продажи</span> · Майнд-карта</h1>
+      <h2>Главная логика разговора</h2>
+      <p class="lead">Прочитайте перед звонком. Это компас для всего разговора.</p>
     </div>
   </div>
-  <div class="badge">8 000 ₽ / мес · 8 занятий · до 8 чел</div>
+
+  <div class="step">
+    <div class="step-head">
+      <span class="step-id">CORE</span>
+      <h3 class="step-title">Кто на проводе</h3>
+    </div>
+    <div class="block listen">
+      <div class="block-head"><span class="badge">Контекст</span></div>
+      <div class="body">Перед тобой действующая студентка курса «Преподаватель хатха-йоги». Она уже доверяет бренду «Академия йоги». Задача — не «продать», а сохранить и углубить это доверие, мягко довести до пробного занятия.</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-head">
+      <span class="step-id">RULES</span>
+      <h3 class="step-title">6 правил, без которых не звоним</h3>
+    </div>
+    <div class="rules-grid">
+      <div class="rule"><div class="num">1</div><h4>Один шаг за звонок</h4><p>Цель первого звонка — пробное. Цель второго — продажа. Не смешивайте.</p></div>
+      <div class="rule"><div class="num">2</div><h4>Слушать &gt; говорить</h4><p>После каждого вопроса — пауза 3–5 сек. Не заполняйте тишину.</p></div>
+      <div class="rule"><div class="num">3</div><h4>Не учёба, а опора</h4><p>YOGO — не вторая нагрузка. Это поддержка тела, чтобы не выпадать из практики.</p></div>
+      <div class="rule"><div class="num">4</div><h4>Не обесценивать Тичерс</h4><p>Тичерс — методология. YOGO — практика. Дополняют, не конкурируют.</p></div>
+      <div class="rule"><div class="num">5</div><h4>Имя + пауза + личное</h4><p>Читать дословно — можно, но добавляйте имя клиентки и микропаузы.</p></div>
+      <div class="rule"><div class="num">6</div><h4>«Нет» — не финал</h4><p>Сегодня неактуально — через 1–2 модуля будет актуально. Не закрывайте карточку.</p></div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-head">
+      <span class="step-id">MAP</span>
+      <h3 class="step-title">Маршрут разговора</h3>
+    </div>
+    <p class="step-goal">Куда вы идёте по сценарию.</p>
+    <div class="scenarios-grid">
+      <div class="sc" data-go="invitation">
+        <span class="sc-num">Раздел 1</span>
+        <h4>Приглашение на пробное</h4>
+        <p>Открытие → YOGO за 30 сек → запись на слот.</p>
+        <span class="arrow">Открыть →</span>
+      </div>
+      <div class="sc" data-go="noshow">
+        <span class="sc-num">Раздел 2</span>
+        <h4>Не пришла на пробное</h4>
+        <p>Возврат, перезапись, считывание реальной причины.</p>
+        <span class="arrow">Открыть →</span>
+      </div>
+      <div class="sc" data-go="sale">
+        <span class="sc-num">Раздел 3</span>
+        <h4>Продажа после пробного</h4>
+        <p>Диагностика → когорта → презентация → цена → оплата.</p>
+        <span class="arrow">Открыть →</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ TAB: ПРИГЛАШЕНИЕ ============================ -->
+<section class="panel" id="panel-invitation" data-section="invitation">
+  <div class="panel-head">
+    <div>
+      <h2>Приглашение на пробное</h2>
+      <p class="lead">Длительность звонка 3–5 минут. Цель — записать на конкретный слот.</p>
+    </div>
+    <div class="section-meta"><span class="dot"></span>6 шагов</div>
+  </div>
+
+  <!-- 1.1 -->
+  <div class="step">
+    <div class="step-head"><span class="step-id">1.1</span><h3 class="step-title">Открытие звонка</h3></div>
+    <p class="step-goal">Представиться, попросить 3–5 минут.</p>
+    <div class="block speak">
+      <div class="block-head">
+        <span class="badge">Говорим клиентке</span>
+        <button class="copy" data-copy="[Имя], здравствуйте! Меня зовут [имя менеджера], звоню из Академии йоги, отдел обучения. В мае мы готовим для студенток большое мероприятие — удобно сейчас 3–5 минут пообщаться по этому поводу?">Копировать</button>
+      </div>
+      <div class="body">[Имя], здравствуйте! Меня зовут [имя менеджера], звоню из Академии йоги, отдел обучения. В мае мы готовим для студенток большое мероприятие — удобно сейчас 3–5 минут пообщаться по этому поводу?</div>
+    </div>
+    <div class="block listen">
+      <div class="block-head"><span class="badge">Слушать</span></div>
+      <div class="body">Пауза. Дайте ей договорить целиком — не вклинивайтесь.</div>
+    </div>
+    <div class="branches">
+      <span class="branches-label">Что услышали?</span>
+      <button class="branch-btn yes" data-branch="b11-yes">Удобно</button>
+      <button class="branch-btn no" data-branch="b11-no">Неудобно</button>
+    </div>
+    <div class="branch-content" id="b11-yes">
+      <p class="branch-title"><span class="branch-tag green">Удобно</span> Знакомство и переход к сути</p>
+      <div class="block speak">
+        <div class="block-head">
+          <span class="badge">Говорим клиентке</span>
+          <button class="copy" data-copy="Супер! Рада с вами познакомиться лично, [Имя]. Вы в целом в курсе этого события или пока не видели новости?">Копировать</button>
+        </div>
+        <div class="body">Супер! Рада с вами познакомиться лично, [Имя]. Вы в целом в курсе этого события или пока не видели новости?</div>
+      </div>
+      <div class="block speak">
+        <div class="block-head">
+          <span class="badge">Связка — независимо от ответа</span>
+          <button class="copy" data-copy="Давайте расскажу коротко, что мы для вас приготовили. Если будут вопросы — с удовольствием раскрою подробнее, что это за сервис.">Копировать</button>
+        </div>
+        <div class="body">Давайте расскажу коротко, что мы для вас приготовили. Если будут вопросы — с удовольствием раскрою подробнее, что это за сервис.</div>
+      </div>
+      <div class="block next"><div class="block-head"><span class="badge">Следующий шаг</span></div><div class="body">Шаг 1.2 — YOGO за 30 секунд.</div></div>
+    </div>
+    <div class="branch-content" id="b11-no">
+      <p class="branch-title"><span class="branch-tag gray">Неудобно</span> Фиксируем перенос</p>
+      <div class="block speak">
+        <div class="block-head">
+          <span class="badge">Говорим клиентке</span>
+          <button class="copy" data-copy="Без проблем. Когда лучше перезвонить?">Копировать</button>
+        </div>
+        <div class="body">Без проблем. Когда лучше перезвонить?</div>
+      </div>
+      <div class="block listen"><div class="block-head"><span class="badge">Что фиксировать</span></div><div class="body">Конкретный день и время — в карточку клиента. Не пытайтесь продолжить сейчас.</div></div>
+    </div>
+  </div>
+
+  <!-- 1.2 -->
+  <div class="step">
+    <div class="step-head"><span class="step-id">1.2</span><h3 class="step-title">Что такое YOGO — за 30 секунд</h3></div>
+    <p class="step-goal">Коротко донести суть и привязать к её модулю.</p>
+    <div class="block speak">
+      <div class="block-head">
+        <span class="badge">Говорим клиентке</span>
+        <button class="copy" data-copy="YOGO — это сервис регулярной практики специально для студенток Тичерса. Только свои, никаких посторонних.
+
+На Тичерсе вы получаете систему, методологию, учитесь думать как преподаватель. А практика идёт у всех по-разному — и именно из этого запроса родился YOGO.">Копировать</button>
+      </div>
+      <div class="body">YOGO — это сервис регулярной практики специально для студенток Тичерса. Только свои, никаких посторонних.
+
+На Тичерсе вы получаете систему, методологию, учитесь думать как преподаватель. А практика идёт у всех по-разному — и именно из этого запроса родился YOGO.</div>
+    </div>
+    <div class="block speak">
+      <div class="block-head">
+        <span class="badge">Привязка к её модулю</span>
+        <button class="copy" data-copy="Небольшие группы — до 8 человек. Каждое занятие заточено под темы того модуля, который вы сейчас проходите. Не абстрактная йога, а прямо то, что у вас в учёбе.
+
+Вы на [N модуле] — значит практика прямо по вашим темам.">Копировать</button>
+      </div>
+      <div class="body">Небольшие группы — до 8 человек. Каждое занятие заточено под темы того модуля, который вы сейчас проходите. Не абстрактная йога, а прямо то, что у вас в учёбе.
+
+Вы на [N модуле] — значит практика прямо по вашим темам.</div>
+    </div>
+    <div class="block warn"><div class="block-head"><span class="badge">Подготовиться до звонка</span></div><div class="body">Уточните номер модуля до звонка. Это превращает шаблон в персональное обращение.</div></div>
+  </div>
+
+  <!-- 1.3 -->
+  <div class="step">
+    <div class="step-head"><span class="step-id">1.3</span><h3 class="step-title">Приглашение на пробное</h3></div>
+    <p class="step-goal">Услышать «да» / «сомнение» / «нет».</p>
+    <div class="block speak">
+      <div class="block-head">
+        <span class="badge">Говорим клиентке</span>
+        <button class="copy" data-copy="Перед запуском мы делаем серию пробных занятий — бесплатно, для студенток Тичерса. Мест немного. Ближайшие слоты — через [N] дней.
+
+Хотите попасть?">Копировать</button>
+      </div>
+      <div class="body">Перед запуском мы делаем серию пробных занятий — бесплатно, для студенток Тичерса. Мест немного. Ближайшие слоты — через [N] дней.
+
+Хотите попасть?</div>
+    </div>
+    <div class="block listen"><div class="block-head"><span class="badge">Слушать</span></div><div class="body">Пауза. Не торопитесь добавлять «или давайте я расскажу подробнее…».</div></div>
+  </div>
+
+  <!-- 1.4 -->
+  <div class="step">
+    <div class="step-head"><span class="step-id">1.4</span><h3 class="step-title">Развилка</h3></div>
+    <p class="step-goal">Считать тип ответа и пойти по нужной ветке.</p>
+    <div class="branches" style="border-top:none;padding-top:0;margin-top:0">
+      <span class="branches-label">Ответ клиентки</span>
+      <button class="branch-btn yes" data-branch="b14-yes">Да</button>
+      <button class="branch-btn maybe" data-branch="b14-doubt">Сомнение</button>
+      <button class="branch-btn no" data-branch="b14-no">Нет / возражение</button>
+    </div>
+    <div class="branch-content" id="b14-yes">
+      <p class="branch-title"><span class="branch-tag green">Да</span> Подбираем слот</p>
+      <div class="block speak">
+        <div class="block-head">
+          <span class="badge">Говорим клиентке</span>
+          <button class="copy" data-copy="Отлично. Утро или вечер удобнее?">Копировать</button>
+        </div>
+        <div class="body">Отлично. Утро или вечер удобнее?</div>
+      </div>
+      <div class="block listen"><div class="block-head"><span class="badge">Подсказка</span></div><div class="body">Назовите 2 конкретных слота под её модуль. Не «у нас много вариантов», а «среда 19:00 или суббота 11:00, что удобнее?»</div></div>
+      <div class="block next"><div class="block-head"><span class="badge">Следующий шаг</span></div><div class="body">Шаг 1.5 — фиксация записи и анкета.</div></div>
+    </div>
+    <div class="branch-content" id="b14-doubt">
+      <p class="branch-title"><span class="branch-tag">Сомнение</span> Возвращаем к сути</p>
+      <div class="block ask">
+        <div class="block-head">
+          <span class="badge">Спросить</span>
+          <button class="copy" data-copy="В целом идея откликается, просто момент неудачный?">Копировать</button>
+        </div>
+        <div class="body">В целом идея откликается, просто момент неудачный?</div>
+      </div>
+      <div class="block listen"><div class="block-head"><span class="badge">Слушать</span></div><div class="body">Если назовёт конкретное возражение — открывайте вкладку «Возражения» по нужному тегу.</div></div>
+      <div class="block forbid"><div class="block-head"><span class="badge">Не говорить</span></div><div class="body">«Решайтесь быстрее, мест мало» / «У нас сегодня последний день».</div></div>
+    </div>
+    <div class="branch-content" id="b14-no">
+      <p class="branch-title"><span class="branch-tag red">Нет / возражение</span> В справочник</p>
+      <div class="block next"><div class="block-head"><span class="badge">Следующий шаг</span></div><div class="body">Откройте вкладку «Возражения» и найдите ответ по типу: время, деньги, хватает Тичерса, не люблю онлайн и т.д.</div></div>
+      <div class="block speak">
+        <div class="block-head">
+          <span class="badge">Если совсем «нет» — мягкий выход</span>
+          <button class="copy" data-copy="Поняла, спасибо за честность. Если надумаете — напишите.">Копировать</button>
+        </div>
+        <div class="body">Поняла, спасибо за честность. Если надумаете — напишите.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 1.5 -->
+  <div class="step">
+    <div class="step-head"><span class="step-id">1.5</span><h3 class="step-title">Фиксация записи и анкета</h3></div>
+    <p class="step-goal">Подтвердить день/время. Объяснить про анкету коротко.</p>
+    <div class="block speak">
+      <div class="block-head">
+        <span class="badge">Говорим клиентке</span>
+        <button class="copy" data-copy="Отлично, записываю. [День], [время] — договорились.
+
+На почту и СМС придёт подтверждение, а вместе с ним короткая анкета. Там ряд вопросов: на чём хотите сделать фокус, что хотите забрать с занятия. Преподаватель прочитает и выстроит практику конкретно под вас.
+
+Это буквально 2 минуты, зато занятие будет вашим на 100%.">Копировать</button>
+      </div>
+      <div class="body">Отлично, записываю. [День], [время] — договорились.
+
+На почту и СМС придёт подтверждение, а вместе с ним короткая анкета. Там ряд вопросов: на чём хотите сделать фокус, что хотите забрать с занятия. Преподаватель прочитает и выстроит практику конкретно под вас.
+
+Это буквально 2 минуты, зато занятие будет вашим на 100%.</div>
+    </div>
+    <div class="block next"><div class="block-head"><span class="badge">После звонка</span></div><div class="body">Сразу отправьте подтверждение в мессенджер: дата, время, ссылка на анкету. Не оставляйте «висеть».</div></div>
+  </div>
+
+  <!-- 1.6 -->
+  <div class="step">
+    <div class="step-head"><span class="step-id">1.6</span><h3 class="step-title">Если не получилось записать</h3></div>
+    <p class="step-goal">Оставить тёплый канал связи.</p>
+    <div class="block speak">
+      <div class="block-head">
+        <span class="badge">Говорим клиентке</span>
+        <button class="copy" data-copy="Хорошо, направлю информацию в мессенджер — сохраните чат. Если надумаете, напишите мне, постараюсь найти место. Слотов совсем немного.">Копировать</button>
+      </div>
+      <div class="body">Хорошо, направлю информацию в мессенджер — сохраните чат. Если надумаете, напишите мне, постараюсь найти место. Слотов совсем немного.</div>
+    </div>
+  </div>
+
+  <!-- Переписка -->
+  <div class="step">
+    <div class="step-head"><span class="step-id">CHAT</span><h3 class="step-title">Если не дозвонилась — пишем в мессенджер</h3></div>
+    <div class="block speak">
+      <div class="block-head"><span class="badge">Сообщение в чат</span>
+        <button class="copy" data-copy="[Имя], добрый день! Меня зовут [имя менеджера], я из команды Академии йоги. Пыталась до вас дозвониться.
+
+Для студенток вашего потока в ближайшие дни мы проводим бесплатные пробные занятия на новом сервисе YOGO. Это живая практика с преподавателем в небольшой группе до 8 человек. Никакой теории. Тема занятия полностью совпадает с теорией, которую вы сейчас проходите на Тичерсе.
+
+Подсказать, какие сейчас есть свободные слоты?">Копировать</button>
+      </div>
+      <div class="body">[Имя], добрый день! Меня зовут [имя менеджера], я из команды Академии йоги. Пыталась до вас дозвониться.
+
+Для студенток вашего потока в ближайшие дни мы проводим бесплатные пробные занятия на новом сервисе YOGO. Это живая практика с преподавателем в небольшой группе до 8 человек. Никакой теории. Тема занятия полностью совпадает с теорией, которую вы сейчас проходите на Тичерсе.
+
+Подсказать, какие сейчас есть свободные слоты?</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-head"><span class="step-id">CHAT</span><h3 class="step-title">Первое сообщение в чат — без звонка</h3></div>
+    <p class="step-goal">Снять страх «опять учиться поверх Тичерса» с первой строки.</p>
+    <div class="block speak">
+      <div class="block-head"><span class="badge">Сообщение в чат</span>
+        <button class="copy" data-copy="Здравствуйте! Пишу вам по YOGO — это формат онлайн-практик, который мы запускаем для студенток Академии.
+
+Сразу важный момент: это не дополнительный курс и не учёба поверх Тичерса.
+
+YOGO — это поддержка личной практики во время обучения. Приходите на занятие, работаете с преподавателем, держите регулярность. Планировать и выбирать самой ничего не нужно.
+
+Если во время Тичерса чувствуете, что на собственную практику не всегда хватает сил или структуры — YOGO как раз про это. Подсказать свободные слоты?">Копировать</button>
+      </div>
+      <div class="body">Здравствуйте! Пишу вам по YOGO — это формат онлайн-практик, который мы запускаем для студенток Академии.
+
+Сразу важный момент: это не дополнительный курс и не учёба поверх Тичерса.
+
+YOGO — это поддержка личной практики во время обучения. Приходите на занятие, работаете с преподавателем, держите регулярность. Планировать и выбирать самой ничего не нужно.
+
+Если во время Тичерса чувствуете, что на собственную практику не всегда хватает сил или структуры — YOGO как раз про это. Подсказать свободные слоты?</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-head"><span class="step-id">CHAT</span><h3 class="step-title">Мягкое приглашение на пробное</h3></div>
+    <p class="step-goal">Снять с пробного любой груз обязательств.</p>
+    <div class="block speak">
+      <div class="block-head"><span class="badge">Сообщение в чат</span>
+        <button class="copy" data-copy="Можно просто прийти на пробное занятие и почувствовать формат.
+
+Никаких обязательств и никакого давления с решением. Задача пробного — понять, помогает ли такой ритм поддерживать практику во время Тичерса.">Копировать</button>
+      </div>
+      <div class="body">Можно просто прийти на пробное занятие и почувствовать формат.
+
+Никаких обязательств и никакого давления с решением. Задача пробного — понять, помогает ли такой ритм поддерживать практику во время Тичерса.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ TAB: НЕ ПРИШЛА ============================ -->
+<section class="panel" id="panel-noshow" data-section="noshow">
+  <div class="panel-head">
+    <div>
+      <h2>Клиентка не пришла на пробное</h2>
+      <p class="lead">Главное правило — не упрекать. Считать настоящую причину.</p>
+    </div>
+    <div class="section-meta"><span class="dot"></span>4 ветки развилки</div>
+  </div>
+
+  <div class="step">
+    <div class="step-head"><span class="step-id">2.1</span><h3 class="step-title">Открытие — призыв перезаписаться</h3></div>
+    <p class="step-goal">Без упрёков, спокойно напомнить и сразу предложить новый слот.</p>
+    <div class="block speak">
+      <div class="block-head">
+        <span class="badge">Говорим клиентке</span>
+        <button class="copy" data-copy="[Имя], добрый день! Это [имя менеджера] из Академии йоги. Вы записывались на пробное YOGO [день] в [время], но не получилось зайти.
+
+Если интересно, могу подобрать другой удобный слот на этой или следующей неделе. Хотите перезаписаться?">Копировать</button>
+      </div>
+      <div class="body">[Имя], добрый день! Это [имя менеджера] из Академии йоги. Вы записывались на пробное YOGO [день] в [время], но не получилось зайти.
+
+Если интересно, могу подобрать другой удобный слот на этой или следующей неделе. Хотите перезаписаться?</div>
+    </div>
+    <div class="block forbid"><div class="block-head"><span class="badge">Не говорить</span></div><div class="body">«Вы пропустили» / «вы не пришли». Используйте «не получилось зайти» — это снимает чувство вины.</div></div>
+  </div>
+
+  <div class="step">
+    <div class="step-head"><span class="step-id">2.2</span><h3 class="step-title">Развилки</h3></div>
+    <p class="step-goal">Понять реальную ситуацию и выбрать одну из 4 веток.</p>
+    <div class="branches" style="border-top:none;padding-top:0;margin-top:0">
+      <span class="branches-label">Какой ответ?</span>
+      <button class="branch-btn yes" data-branch="b22-yes">Да, перезапишусь</button>
+      <button class="branch-btn maybe" data-branch="b22-forgot">Забыла / не сложилось</button>
+      <button class="branch-btn maybe" data-branch="b22-doubt">Сомнение / уход от ответа</button>
+      <button class="branch-btn no" data-branch="b22-no">Стало неактуально</button>
+    </div>
+    <div class="branch-content" id="b22-yes">
+      <p class="branch-title"><span class="branch-tag green">Да</span> Перезаписываем</p>
+      <div class="block speak">
+        <div class="block-head">
+          <span class="badge">Говорим клиентке</span>
+          <button class="copy" data-copy="Отлично. Утро или вечер удобнее? Есть слот [конкретное время].">Копировать</button>
+        </div>
+        <div class="body">Отлично. Утро или вечер удобнее? Есть слот [конкретное время].</div>
+      </div>
+      <div class="block next"><div class="block-head"><span class="badge">Следующий шаг</span></div><div class="body">Стандартная фиксация записи — как в шаге 1.5.</div></div>
+    </div>
+    <div class="branch-content" id="b22-forgot">
+      <p class="branch-title"><span class="branch-tag green">Забыла / не сложилось</span> Просто переносим</p>
+      <div class="block speak">
+        <div class="block-head">
+          <span class="badge">Говорим клиентке</span>
+          <button class="copy" data-copy="Бывает. Тогда давайте просто перенесём — на этой неделе ещё есть [слот] и [слот]. Какой удобнее?">Копировать</button>
+        </div>
+        <div class="body">Бывает. Тогда давайте просто перенесём — на этой неделе ещё есть [слот] и [слот]. Какой удобнее?</div>
+      </div>
+      <div class="block listen"><div class="block-head"><span class="badge">Подсказка</span></div><div class="body">Слово «Бывает» снимает напряжение лучше, чем «понимаю». Сразу — конкретные слоты.</div></div>
+    </div>
+    <div class="branch-content" id="b22-doubt">
+      <p class="branch-title"><span class="branch-tag">Сомнение</span> Считаем настоящую причину</p>
+      <div class="block ask">
+        <div class="block-head">
+          <span class="badge">Спросить</span>
+          <button class="copy" data-copy="Понимаю. Мне важно понять — что вас остановило в этот раз? Поделитесь?">Копировать</button>
+        </div>
+        <div class="body">Понимаю. Мне важно понять — что вас остановило в этот раз? Поделитесь?</div>
+      </div>
+      <div class="block listen"><div class="block-head"><span class="badge">Слушать</span></div><div class="body">Пауза. Слушайте до конца — она сама назовёт настоящую причину. Не подсказывайте варианты.</div></div>
+      <div class="block next"><div class="block-head"><span class="badge">Следующий шаг</span></div><div class="body">Услышали возражение — открываем вкладку «Возражения» по нужному тегу.</div></div>
+    </div>
+    <div class="branch-content" id="b22-no">
+      <p class="branch-title"><span class="branch-tag red">Неактуально</span> Мягкий выход</p>
+      <div class="block speak">
+        <div class="block-head">
+          <span class="badge">Говорим клиентке</span>
+          <button class="copy" data-copy="Поняла, спасибо за честность. Если ещё подумаете, напишите — постараюсь найти место.">Копировать</button>
+        </div>
+        <div class="body">Поняла, спасибо за честность. Если ещё подумаете, напишите — постараюсь найти место.</div>
+      </div>
+      <div class="block next"><div class="block-head"><span class="badge">Что зафиксировать</span></div><div class="body">Причина: «период», «нагрузка», «онлайн», «деньги». Дата следующего касания: через 1–2 модуля.</div></div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-head"><span class="step-id">2.3</span><h3 class="step-title">Сообщение в чат, если не дозвонилась</h3></div>
+    <p class="step-goal">Не «как вам понравилось», а вопрос про опыт без ожиданий.</p>
+    <div class="block speak">
+      <div class="block-head">
+        <span class="badge">Сообщение в чат</span>
+        <button class="copy" data-copy="Как вам практика, [Имя]?
+
+Мне интересно даже не «понравилось или нет», а другое: было ли проще войти в практику, когда не нужно самой ничего планировать?
+
+Удобно созвониться на 5 минут, чтобы коротко обсудить ваши ощущения?">Копировать</button>
+      </div>
+      <div class="body">Как вам практика, [Имя]?
+
+Мне интересно даже не «понравилось или нет», а другое: было ли проще войти в практику, когда не нужно самой ничего планировать?
+
+Удобно созвониться на 5 минут, чтобы коротко обсудить ваши ощущения?</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-head"><span class="step-id">2.4</span><h3 class="step-title">Частые скрытые причины «не пришла»</h3></div>
+    <p class="step-goal">Кнопки переключают на нужную карточку в справочнике возражений.</p>
+    <div class="branches" style="border-top:none;padding-top:0;margin-top:0">
+      <span class="branches-label">Что чаще всего звучит вместо настоящей причины:</span>
+      <button class="branch-btn" onclick="goObjection('time')">Не было времени</button>
+      <button class="branch-btn" onclick="goObjection('teachers')">Хватает Тичерса</button>
+      <button class="branch-btn" onclick="goObjection('online')">Не люблю онлайн</button>
+      <button class="branch-btn" onclick="goObjection('self')">Занимаюсь сама</button>
+      <button class="branch-btn" onclick="goObjection('think')">Подумаю</button>
+      <button class="branch-btn" onclick="goObjection('not-decided')">Не готова решать</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ TAB: ПРОДАЖА ============================ -->
+<section class="panel" id="panel-sale" data-section="sale">
+  <div class="panel-head">
+    <div>
+      <h2>Продажа после пробного</h2>
+      <p class="lead">Цель — помочь студентке самой увидеть разрыв и понять, что YOGO его закрывает.</p>
+    </div>
+    <div class="section-meta"><span class="dot"></span>16 шагов</div>
+  </div>
+
+  <!-- CORE -->
+  <div class="step">
+    <div class="step-head">
+      <span class="step-id">CORE</span>
+      <h3 class="step-title">Главная логика звонка</h3>
+    </div>
+    <p class="step-goal">Не «продать абонемент любой ценой». Помочь увидеть собственный разрыв.</p>
+    <div class="block listen">
+      <div class="block-head"><span class="badge">Маршрут</span></div>
+      <div class="body">Помочь студентке самой увидеть: 1) как практикует сейчас → 2) как хочет практиковать → 3) что мешает → 4) почему это правда проблема → 5) как YOGO закрывает её разрыв → 6) готова ли встроить это в жизнь.</div>
+    </div>
+    <div class="block speak">
+      <div class="block-head"><span class="badge">Главная фраза блока продажи</span>
+        <button class="copy" data-copy="YOGO — это место, где практика перестаёт держаться только на силе воли.">Копировать</button>
+      </div>
+      <div class="body">YOGO — это место, где практика перестаёт держаться только на силе воли.</div>
+    </div>
+  </div>
+
+  <!-- 3.1 -->
+  <div class="step">
+    <div class="step-head"><span class="step-id">3.1</span><h3 class="step-title">Открытие</h3></div>
+    <div class="block speak">
+      <div class="block-head"><span class="badge">Говорим клиентке</span>
+        <button class="copy" data-copy="[Имя], здравствуйте! Это [имя менеджера] из Академии йоги.
+
+Вы были на пробном занятии YOGO [день/дата]. Хочу коротко услышать ваши ощущения и понять, насколько формат вам подошёл.
+
+Удобно сейчас 7–10 минут спокойно поговорить?">Копировать</button>
+      </div>
+      <div class="body">[Имя], здравствуйте! Это [имя менеджера] из Академии йоги.
+
+Вы были на пробном занятии YOGO [день/дата]. Хочу коротко услышать ваши ощущения и понять, насколько формат вам подошёл.
+
+Удобно сейчас 7–10 минут спокойно поговорить?</div>
+    </div>
+    <div class="block speak">
+      <div class="block-head"><span class="badge">Если неудобно</span>
+        <button class="copy" data-copy="Понимаю. Когда вам будет удобно, чтобы я коротко набрала вас сегодня или завтра?">Копировать</button>
+      </div>
+      <div class="body">Понимаю. Когда вам будет удобно, чтобы я коротко набрала вас сегодня или завтра?</div>
+    </div>
+  </div>
+
+  <!-- 3.2 -->
+  <div class="step">
+    <div class="step-head"><span class="step-id">3.2</span><h3 class="step-title">Обратная связь после пробного</h3></div>
+    <p class="step-goal">Услышать живые ощущения, не «понравилось / не понравилось».</p>
+    <div class="block speak">
+      <div class="block-head"><span class="badge">Говорим клиентке</span>
+        <button class="copy" data-copy="Расскажите, пожалуйста, как вам пробное?
+
+Мне важно не просто «понравилось / не понравилось», а именно ваши живые ощущения: что было полезно, что откликнулось, а что, может быть, не совпало с ожиданиями?">Копировать</button>
+      </div>
+      <div class="body">Расскажите, пожалуйста, как вам пробное?
+
+Мне важно не просто «понравилось / не понравилось», а именно ваши живые ощущения: что было полезно, что откликнулось, а что, может быть, не совпало с ожиданиями?</div>
+    </div>
+    <div class="block listen"><div class="block-head"><span class="badge">Слушаем</span></div><div class="body">Пауза. Слушаем. Не перебиваем.</div></div>
+
+    <div class="block ask">
+      <div class="block-head"><span class="badge">Уточняющий — если ответ общий</span>
+        <button class="copy" data-copy="А если чуть конкретнее — что именно запомнилось?
+
+Было ли ощущение, что в таком формате проще войти в практику, чем когда нужно самой себя собирать?">Копировать</button>
+      </div>
+      <div class="body">А если чуть конкретнее — что именно запомнилось?
+
+Было ли ощущение, что в таком формате проще войти в практику, чем когда нужно самой себя собирать?</div>
+    </div>
+
+    <div class="block ask">
+      <div class="block-head"><span class="badge">Уточняющий — если ответ сдержанный</span>
+        <button class="copy" data-copy="Поняла. А чего вам не хватило на пробном, чтобы формат ощущался прямо «мой»?">Копировать</button>
+      </div>
+      <div class="body">Поняла. А чего вам не хватило на пробном, чтобы формат ощущался прямо «мой»?</div>
+    </div>
+  </div>
+
+  <!-- 3.3 -->
+  <div class="step">
+    <div class="step-head"><span class="step-id">3.3</span><h3 class="step-title">Как клиентка практикует сейчас</h3></div>
+    <div class="block ask">
+      <div class="block-head"><span class="badge">Спросить</span>
+        <button class="copy" data-copy="Давайте я чуть лучше пойму вашу ситуацию. Как сейчас у вас с личной практикой во время Тичерса?
+
+Она есть регулярно — или скорее получается рывками, когда есть силы и время?">Копировать</button>
+      </div>
+      <div class="body">Давайте я чуть лучше пойму вашу ситуацию. Как сейчас у вас с личной практикой во время Тичерса?
+
+Она есть регулярно — или скорее получается рывками, когда есть силы и время?</div>
+    </div>
+
+    <div class="branches" style="border-top:none;padding-top:0;margin-top:0">
+      <span class="branches-label">Что услышали?</span>
+      <button class="branch-btn yes" data-branch="b33-regular">Регулярно</button>
+      <button class="branch-btn maybe" data-branch="b33-falls">Выпадает</button>
+    </div>
+
+    <div class="branch-content" id="b33-regular">
+      <p class="branch-title"><span class="branch-tag green">Регулярно</span> Идём в углубление</p>
+      <div class="block speak">
+        <div class="block-head"><span class="badge">Говорим клиентке</span>
+          <button class="copy" data-copy="Классно, что практика уже есть.
+
+А сейчас вам больше важно сохранить регулярность, углубить качество, получить обратную связь по технике — или подготовиться к какому-то конкретному результату?">Копировать</button>
+        </div>
+        <div class="body">Классно, что практика уже есть.
+
+А сейчас вам больше важно сохранить регулярность, углубить качество, получить обратную связь по технике — или подготовиться к какому-то конкретному результату?</div>
+      </div>
+    </div>
+
+    <div class="branch-content" id="b33-falls">
+      <p class="branch-title"><span class="branch-tag">Выпадает</span> Считаем последствия</p>
+      <div class="block speak">
+        <div class="block-head"><span class="badge">Говорим клиентке</span>
+          <button class="copy" data-copy="Понимаю. Это очень частая история на Тичерсе.
+
+А что обычно происходит, когда практика выпадает? Как это влияет на состояние, обучение, уверенность, контакт с телом?">Копировать</button>
+        </div>
+        <div class="body">Понимаю. Это очень частая история на Тичерсе.
+
+А что обычно происходит, когда практика выпадает? Как это влияет на состояние, обучение, уверенность, контакт с телом?</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3.4 -->
+  <div class="step">
+    <div class="step-head"><span class="step-id">3.4</span><h3 class="step-title">Как клиентка хочет практиковать</h3></div>
+    <div class="block ask">
+      <div class="block-head"><span class="badge">Спросить</span>
+        <button class="copy" data-copy="А если представить идеальную картину через 2–3 месяца: как бы вы хотели, чтобы выглядела ваша практика?
+
+Например: сколько раз в неделю вы занимаетесь; что чувствуете в теле; насколько уверенно выполняете формы; есть ли ощущение прогресса; насколько спокойно вам внутри.
+
+Какой результат был бы для вас хорошим?">Копировать</button>
+      </div>
+      <div class="body">А если представить идеальную картину через 2–3 месяца: как бы вы хотели, чтобы выглядела ваша практика?
+
+Например: сколько раз в неделю вы занимаетесь; что чувствуете в теле; насколько уверенно выполняете формы; есть ли ощущение прогресса; насколько спокойно вам внутри.
+
+Какой результат был бы для вас хорошим?</div>
+    </div>
+    <div class="block listen"><div class="block-head"><span class="badge">Слушаем</span></div><div class="body">Пауза. Дать договорить до конца.</div></div>
+  </div>
+
+  <!-- 3.5 -->
+  <div class="step" style="border-color:var(--blue-bd);background:#FAFCFF">
+    <div class="step-head">
+      <span class="step-id" style="background:var(--blue);color:#fff">3.5</span>
+      <h3 class="step-title">Определяем цель: профессия или личная практика</h3>
+    </div>
+    <p class="step-goal">Этот шаг открывает нужную ветку презентации (3.6 или 3.7).</p>
+    <div class="block ask">
+      <div class="block-head"><span class="badge">Спросить</span>
+        <button class="copy" data-copy="А обучение на Тичерсе для вас сейчас больше про что?
+
+Первое — вы хотите выйти в профессию, преподавать, начать зарабатывать, чувствовать себя уверенно как будущий преподаватель.
+
+Или второе — это больше про личный путь: сильная практика, тело, развитие, дисциплина, уровень преподавателя для себя, а преподавание возможно, но не срочная цель.
+
+Что вам ближе?">Копировать</button>
+      </div>
+      <div class="body">А обучение на Тичерсе для вас сейчас больше про что?
+
+Первое — вы хотите выйти в профессию, преподавать, начать зарабатывать, чувствовать себя уверенно как будущий преподаватель.
+
+Или второе — это больше про личный путь: сильная практика, тело, развитие, дисциплина, уровень преподавателя для себя, а преподавание возможно, но не срочная цель.
+
+Что вам ближе?</div>
+    </div>
+
+    <div class="cohort-grid">
+      <div class="cohort-card" data-cohort="1">
+        <span class="cohort-tag">Когорта 1 · 3.6</span>
+        <h3>Идёт в профессию</h3>
+        <p class="summary">Хочет преподавать, выйти в профессию, чувствовать себя уверенно.</p>
+        <ul>
+          <li>хочет преподавать</li>
+          <li>хочет начать зарабатывать</li>
+          <li>боится быть недостаточно хорошей</li>
+          <li>есть страх самозванца</li>
+          <li>боится вести людей</li>
+        </ul>
+        <button class="pick" data-cohort-pick="1">Идёт в профессию</button>
+      </div>
+      <div class="cohort-card" data-cohort="2">
+        <span class="cohort-tag">Когорта 2 · 3.7</span>
+        <h3>Практикует для себя</h3>
+        <p class="summary">Сильная практика, тело, развитие. Преподавание не срочная цель.</p>
+        <ul>
+          <li>пришла для себя</li>
+          <li>хочет тело, дисциплину, развитие</li>
+          <li>хочет быть практиком уровня преподавателя</li>
+          <li>расстраивается, что практики стало меньше</li>
+        </ul>
+        <button class="pick" data-cohort-pick="2">Практикует для себя</button>
+      </div>
+    </div>
+    <div class="cohort-hint" id="cohort-hint">↑ Выберите ветку — раскроется нужная презентация ниже</div>
+  </div>
+
+  <!-- 3.6 Профессия -->
+  <div class="cohort-block" data-for="1" id="branch-1">
+    <div class="cohort-block-head">
+      <span class="step-id" style="background:var(--blue);color:#fff">3.6</span>
+      <h4>Ветка · Идёт в профессию</h4>
+    </div>
+
+    <div class="block ask">
+      <div class="block-head"><span class="badge">Диагностика</span>
+        <button class="copy" data-copy="А сейчас внутри уже есть ощущение: «я могу вести людей, я понимаю, что делаю»?
+
+Или пока больше есть сомнение, внутренний критик, ощущение «я ещё недостаточно хороша»?">Копировать</button>
+      </div>
+      <div class="body">А сейчас внутри уже есть ощущение: «я могу вести людей, я понимаю, что делаю»?
+
+Или пока больше есть сомнение, внутренний критик, ощущение «я ещё недостаточно хороша»?</div>
+    </div>
+
+    <div class="block ask">
+      <div class="block-head"><span class="badge">Дополнительный вопрос</span>
+        <button class="copy" data-copy="Что сейчас больше всего мешает почувствовать себя уверенно как будущий преподаватель?
+
+Техника? Регулярность? Страх проявляться? Экзамен? Ощущение, что знания есть, а тело ещё не догнало?">Копировать</button>
+      </div>
+      <div class="body">Что сейчас больше всего мешает почувствовать себя уверенно как будущий преподаватель?
+
+Техника? Регулярность? Страх проявляться? Экзамен? Ощущение, что знания есть, а тело ещё не догнало?</div>
+    </div>
+
+    <div class="block speak">
+      <div class="block-head"><span class="badge">Выводим на осознание</span>
+        <button class="copy" data-copy="Я правильно слышу, что проблема не только в том, чтобы «ещё позаниматься йогой».
+
+Скорее важно, чтобы внутри появилось чувство: «я правда становлюсь преподавателем, я могу опираться на свою практику и вести других».
+
+Так?">Копировать</button>
+      </div>
+      <div class="body">Я правильно слышу, что проблема не только в том, чтобы «ещё позаниматься йогой».
+
+Скорее важно, чтобы внутри появилось чувство: «я правда становлюсь преподавателем, я могу опираться на свою практику и вести других».
+
+Так?</div>
+    </div>
+    <div class="block listen"><div class="block-head"><span class="badge">Слушаем</span></div><div class="body">Пауза. Ждём «да».</div></div>
+
+    <div class="block speak">
+      <div class="block-head"><span class="badge">Презентация YOGO через её боль</span>
+        <button class="copy" data-copy="Вот как раз здесь YOGO очень точно попадает.
+
+Потому что это не просто онлайн-занятия. YOGO встроен в ваш путь на Тичерсе: практика идёт рядом с модулями, преподаватель понимает, что вы сейчас проходите, какие темы важны, к чему вы готовитесь и где обычно проседают студентки.
+
+Для будущего преподавателя это особенно важно. Потому что уверенность рождается не из диплома и не из того, что «я всё прочитала».
+
+Она рождается из тела: когда вы регулярно практикуете, получаете обратную связь, видите свой прогресс и постепенно чувствуете: «Я понимаю, что делаю. Я могу. У меня есть опора».">Копировать</button>
+      </div>
+      <div class="body">Вот как раз здесь YOGO очень точно попадает.
+
+Потому что это не просто онлайн-занятия. YOGO встроен в ваш путь на Тичерсе: практика идёт рядом с модулями, преподаватель понимает, что вы сейчас проходите, какие темы важны, к чему вы готовитесь и где обычно проседают студентки.
+
+Для будущего преподавателя это особенно важно. Потому что уверенность рождается не из диплома и не из того, что «я всё прочитала».
+
+Она рождается из тела: когда вы регулярно практикуете, получаете обратную связь, видите свой прогресс и постепенно чувствуете: «Я понимаю, что делаю. Я могу. У меня есть опора».</div>
+    </div>
+
+    <div class="block speak">
+      <div class="block-head"><span class="badge">Ключевая фраза</span>
+        <button class="copy" data-copy="Хороший преподаватель — это не только человек, который знает методологию.
+
+Это человек, у которого есть живая личная практика.
+
+YOGO помогает эту практику не потерять во время обучения, а наоборот — сделать её вашей опорой.">Копировать</button>
+      </div>
+      <div class="body">Хороший преподаватель — это не только человек, который знает методологию.
+
+Это человек, у которого есть живая личная практика.
+
+YOGO помогает эту практику не потерять во время обучения, а наоборот — сделать её вашей опорой.</div>
+    </div>
+  </div>
+
+  <!-- 3.7 Для себя -->
+  <div class="cohort-block" data-for="2" id="branch-2">
+    <div class="cohort-block-head">
+      <span class="step-id" style="background:var(--green);color:#fff">3.7</span>
+      <h4>Ветка · Практикует для себя</h4>
+    </div>
+
+    <div class="block speak">
+      <div class="block-head"><span class="badge">Диагностика</span>
+        <button class="copy" data-copy="Тогда для вас, как я понимаю, важен не просто диплом, а ощущение, что вы реально растёте в практике.
+
+Что тело меняется, становится сильнее, гибче, устойчивее. Что вы не просто учитесь «головой», а правда становитесь практиком другого уровня.
+
+Правильно?">Копировать</button>
+      </div>
+      <div class="body">Тогда для вас, как я понимаю, важен не просто диплом, а ощущение, что вы реально растёте в практике.
+
+Что тело меняется, становится сильнее, гибче, устойчивее. Что вы не просто учитесь «головой», а правда становитесь практиком другого уровня.
+
+Правильно?</div>
+    </div>
+
+    <div class="block ask">
+      <div class="block-head"><span class="badge">Дополнительный вопрос</span>
+        <button class="copy" data-copy="А сейчас есть ощущение, что практика растёт вместе с обучением?
+
+Или наоборот: знаний стало больше, а сил и времени на коврик стало меньше?">Копировать</button>
+      </div>
+      <div class="body">А сейчас есть ощущение, что практика растёт вместе с обучением?
+
+Или наоборот: знаний стало больше, а сил и времени на коврик стало меньше?</div>
+    </div>
+
+    <div class="block speak">
+      <div class="block-head"><span class="badge">Выводим на осознание</span>
+        <button class="copy" data-copy="То есть получается такой парадокс: вы пришли в обучение, чтобы глубже практиковать и расти, но из-за нагрузки, новых знаний и расписания практика может начать проседать.
+
+И тогда голова учится, а тело как будто не успевает.
+
+Это похоже на вашу ситуацию?">Копировать</button>
+      </div>
+      <div class="body">То есть получается такой парадокс: вы пришли в обучение, чтобы глубже практиковать и расти, но из-за нагрузки, новых знаний и расписания практика может начать проседать.
+
+И тогда голова учится, а тело как будто не успевает.
+
+Это похоже на вашу ситуацию?</div>
+    </div>
+    <div class="block listen"><div class="block-head"><span class="badge">Слушаем</span></div><div class="body">Пауза. Ждём «да».</div></div>
+
+    <div class="block speak">
+      <div class="block-head"><span class="badge">Презентация YOGO через её боль</span>
+        <button class="copy" data-copy="Вот именно для этого YOGO и создан. Чтобы тело успевало за обучением.
+
+Вам не нужно самой думать, что сегодня практиковать, искать видео, собирать себя на силе воли или заниматься абы как.
+
+Есть понятный ритм, маленькая группа, преподаватель, обратная связь и практика, которая связана с вашим модулем на Тичерсе.
+
+То есть вы не просто «ходите на йогу». Вы закрепляете обучение в теле. И за счёт этого практика снова становится частью жизни, а не чем-то, что всё время разваливается от усталости.">Копировать</button>
+      </div>
+      <div class="body">Вот именно для этого YOGO и создан. Чтобы тело успевало за обучением.
+
+Вам не нужно самой думать, что сегодня практиковать, искать видео, собирать себя на силе воли или заниматься абы как.
+
+Есть понятный ритм, маленькая группа, преподаватель, обратная связь и практика, которая связана с вашим модулем на Тичерсе.
+
+То есть вы не просто «ходите на йогу». Вы закрепляете обучение в теле. И за счёт этого практика снова становится частью жизни, а не чем-то, что всё время разваливается от усталости.</div>
+    </div>
+
+    <div class="block speak">
+      <div class="block-head"><span class="badge">Ключевая фраза</span>
+        <button class="copy" data-copy="YOGO помогает не потерять то, ради чего вы вообще пришли в йогу: контакт с телом, ощущение роста и чувство, что вы становитесь сильнее, глубже и устойчивее.">Копировать</button>
+      </div>
+      <div class="body">YOGO помогает не потерять то, ради чего вы вообще пришли в йогу: контакт с телом, ощущение роста и чувство, что вы становитесь сильнее, глубже и устойчивее.</div>
+    </div>
+  </div>
+
+  <!-- 3.8 -->
+  <div class="step">
+    <div class="step-head"><span class="step-id">3.8</span><h3 class="step-title">Универсальное зеркало боли</h3></div>
+    <p class="step-goal">Вернуть слова клиентки и связать их с YOGO.</p>
+
+    <div class="block speak">
+      <div class="block-head"><span class="badge">Шаблон фразы</span>
+        <button class="copy" data-copy="Вы сказали, что [дословная фраза клиентки].
+
+И мне кажется, YOGO как раз закрывает этот разрыв. Не через ещё одну учебную нагрузку, не через лекции и домашки, а через регулярную живую практику, где вас видят, ведут и помогают телу успевать за обучением.">Копировать</button>
+      </div>
+      <div class="body">Вы сказали, что [дословная фраза клиентки].
+
+И мне кажется, YOGO как раз закрывает этот разрыв. Не через ещё одну учебную нагрузку, не через лекции и домашки, а через регулярную живую практику, где вас видят, ведут и помогают телу успевать за обучением.</div>
+    </div>
+  </div>
+
+  <!-- 3.9 -->
+  <div class="step">
+    <div class="step-head"><span class="step-id">3.9</span><h3 class="step-title">Главная ценность YOGO</h3></div>
+
+    <div class="block speak">
+      <div class="block-head"><span class="badge">Говорим клиентке</span>
+        <button class="copy" data-copy="Если коротко, ценность YOGO в трёх вещах.
+
+Первое — это практика под ваш учебный трек. Не абстрактная йога, а то, что связано с вашим модулем и задачами на Тичерсе.
+
+Второе — маленькая группа до 8 человек. Преподаватель видит вас, даёт обратную связь и понимает, где вы сейчас.
+
+Третье — это регулярность. Появляется место, где практика перестаёт держаться только на силе воли.
+
+И очень часто студентки после нескольких занятий говорят: «Я наконец перестала всё время начинать сначала».">Копировать</button>
+      </div>
+      <div class="body">Если коротко, ценность YOGO в трёх вещах.
+
+Первое — это практика под ваш учебный трек. Не абстрактная йога, а то, что связано с вашим модулем и задачами на Тичерсе.
+
+Второе — маленькая группа до 8 человек. Преподаватель видит вас, даёт обратную связь и понимает, где вы сейчас.
+
+Третье — это регулярность. Появляется место, где практика перестаёт держаться только на силе воли.
+
+И очень часто студентки после нескольких занятий говорят: «Я наконец перестала всё время начинать сначала».</div>
+    </div>
+
+    <div class="meanings" style="margin-top:14px">
+      <div class="meaning">Практика под ваш модуль</div>
+      <div class="meaning">Преподаватель понимает учебный трек</div>
+      <div class="meaning">Маленькая группа до 8</div>
+      <div class="meaning">Только студентки Академии</div>
+      <div class="meaning">Регулярность вместо силы воли</div>
+      <div class="meaning">Тело успевает за обучением</div>
+    </div>
+  </div>
+
+  <!-- 3.10 -->
+  <div class="step">
+    <div class="step-head"><span class="step-id">3.10</span><h3 class="step-title">Проверка попадания</h3></div>
+    <div class="block ask">
+      <div class="block-head"><span class="badge">Спросить</span>
+        <button class="copy" data-copy="Как вам это сейчас откликается?
+
+Если смотреть именно на вашу ситуацию — это больше похоже на то, что может помочь, или пока не совсем попадает?">Копировать</button>
+      </div>
+      <div class="body">Как вам это сейчас откликается?
+
+Если смотреть именно на вашу ситуацию — это больше похоже на то, что может помочь, или пока не совсем попадает?</div>
+    </div>
+    <div class="block listen"><div class="block-head"><span class="badge">Слушаем</span></div><div class="body">Пауза. Дайте ей сформулировать.</div></div>
+  </div>
+
+  <!-- 3.11 -->
+  <div class="step">
+    <div class="step-head"><span class="step-id">3.11</span><h3 class="step-title">Цена</h3></div>
+    <div class="block speak">
+      <div class="block-head"><span class="badge">Говорим клиентке</span>
+        <button class="copy" data-copy="По стоимости — [6 000 / 8 000] рублей в месяц. Это 8 живых занятий с преподавателем в небольшой группе.
+
+Но если честно, студентки остаются не из-за количества занятий. А из-за ощущения, что практика снова становится частью жизни: есть ритм, есть преподаватель, есть группа, есть связь с обучением, и не нужно каждый раз начинать сначала.">Копировать</button>
+      </div>
+      <div class="body">По стоимости — [6 000 / 8 000] рублей в месяц. Это 8 живых занятий с преподавателем в небольшой группе.
+
+Но если честно, студентки остаются не из-за количества занятий. А из-за ощущения, что практика снова становится частью жизни: есть ритм, есть преподаватель, есть группа, есть связь с обучением, и не нужно каждый раз начинать сначала.</div>
+    </div>
+  </div>
+
+  <!-- 3.12 -->
+  <div class="step">
+    <div class="step-head"><span class="step-id">3.12</span><h3 class="step-title">Мягкое закрытие</h3></div>
+    <div class="block ask">
+      <div class="block-head"><span class="badge">Спросить</span>
+        <button class="copy" data-copy="Как вам внутри сейчас ощущается: это скорее «да, мне откликается, я хочу встроить это в обучение» или пока есть внутренний стоп?">Копировать</button>
+      </div>
+      <div class="body">Как вам внутри сейчас ощущается: это скорее «да, мне откликается, я хочу встроить это в обучение» или пока есть внутренний стоп?</div>
+    </div>
+  </div>
+
+    <!-- 3.13 -->
+  <div class="step">
+    <div class="step-head"><span class="step-id">3.13</span><h3 class="step-title">Если есть сомнение</h3></div>
+    <p class="step-goal">3 типа сомнения — 3 разных ответа.</p>
+    <div class="branches" style="border-top:none;padding-top:0;margin-top:0">
+      <span class="branches-label">Что услышали?</span>
+      <button class="branch-btn maybe" data-branch="b313-think">«Мне надо подумать»</button>
+      <button class="branch-btn maybe" data-branch="b313-money">Про деньги</button>
+      <button class="branch-btn maybe" data-branch="b313-time">Про время</button>
+    </div>
+
+    <div class="branch-content" id="b313-think">
+      <p class="branch-title">«Мне надо подумать»</p>
+      <div class="block ask">
+        <div class="block-head"><span class="badge">Спросить</span>
+          <button class="copy" data-copy="Конечно. А можно уточню — вы сейчас больше сомневаетесь, нужно ли это вообще… или скорее боитесь, что снова не найдёте на себя время?">Копировать</button>
+        </div>
+        <div class="body">Конечно. А можно уточню — вы сейчас больше сомневаетесь, нужно ли это вообще… или скорее боитесь, что снова не найдёте на себя время?</div>
+      </div>
+      <div class="block listen"><div class="block-head"><span class="badge">Слушаем</span></div><div class="body">Пауза.</div></div>
+    </div>
+
+    <div class="branch-content" id="b313-money">
+      <p class="branch-title">Если про деньги</p>
+      <div class="block speak">
+        <div class="block-head"><span class="badge">Говорим клиентке</span>
+          <button class="copy" data-copy="Понимаю. И здесь, мне кажется, важно честно ответить себе не только на вопрос: «дорого или нет». А ещё: сколько сейчас стоит то состояние, в котором практика постепенно выпадает из жизни.">Копировать</button>
+        </div>
+        <div class="body">Понимаю. И здесь, мне кажется, важно честно ответить себе не только на вопрос: «дорого или нет». А ещё: сколько сейчас стоит то состояние, в котором практика постепенно выпадает из жизни.</div>
+      </div>
+    </div>
+
+    <div class="branch-content" id="b313-time">
+      <p class="branch-title">Если про время</p>
+      <div class="block speak">
+        <div class="block-head"><span class="badge">Говорим клиентке</span>
+          <button class="copy" data-copy="Мне кажется, здесь вопрос даже не в двух часах в неделю. А в том, останется ли вообще пространство для себя внутри всего обучения.">Копировать</button>
+        </div>
+        <div class="body">Мне кажется, здесь вопрос даже не в двух часах в неделю. А в том, останется ли вообще пространство для себя внутри всего обучения.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3.14 -->
+  <div class="step">
+    <div class="step-head"><span class="step-id">3.14</span><h3 class="step-title">Закрытие в оплату</h3></div>
+    <div class="block speak">
+      <div class="block-head"><span class="badge">Говорим клиентке</span>
+        <button class="copy" data-copy="Мне кажется, вам это правда может дать хорошую опору на время обучения. Если хотите — можем спокойно зафиксировать место в группе, и я пришлю вам оплату.">Копировать</button>
+      </div>
+      <div class="body">Мне кажется, вам это правда может дать хорошую опору на время обучения. Если хотите — можем спокойно зафиксировать место в группе, и я пришлю вам оплату.</div>
+    </div>
+    <div class="block listen"><div class="block-head"><span class="badge">Слушаем</span></div><div class="body">Пауза.</div></div>
+  </div>
+
+  <!-- 3.15 -->
+  <div class="step">
+    <div class="step-head"><span class="step-id">3.15</span><h3 class="step-title">После согласия</h3></div>
+    <div class="block speak">
+      <div class="block-head"><span class="badge">Говорим клиентке</span>
+        <button class="copy" data-copy="Супер. Мне очень нравится, когда в YOGO приходят именно с ощущением: «я хочу поддержать себя в практике», а не из давления или «надо». Мне кажется, тогда формат раскрывается совсем по-другому.">Копировать</button>
+      </div>
+      <div class="body">Супер. Мне очень нравится, когда в YOGO приходят именно с ощущением: «я хочу поддержать себя в практике», а не из давления или «надо». Мне кажется, тогда формат раскрывается совсем по-другому.</div>
+    </div>
+  </div>
+
+  <!-- 3.16 -->
+  <div class="step">
+    <div class="step-head"><span class="step-id">3.16</span><h3 class="step-title">Если не готова — без дожима</h3></div>
+    <div class="block speak">
+      <div class="block-head"><span class="badge">Говорим клиентке</span>
+        <button class="copy" data-copy="Хорошо. Откладываете идею на неопределённый срок или созвонимся через пару дней, чтобы зафиналиться по решению?">Копировать</button>
+      </div>
+      <div class="body">Хорошо. Откладываете идею на неопределённый срок или созвонимся через пару дней, чтобы зафиналиться по решению?</div>
+    </div>
+    <div class="block forbid"><div class="block-head"><span class="badge">Не говорить</span></div><div class="body">«Скидка только сегодня», «давайте я вас уговорю», «вы потом пожалеете».</div></div>
+  </div>
+</section>
+
+<!-- ============================ TAB: ВОЗРАЖЕНИЯ ============================ -->
+<section class="panel" id="panel-objections" data-section="objections">
+  <div class="panel-head">
+    <div>
+      <h2>Возражения</h2>
+      <p class="lead">Каждый ответ заканчивается уточняющим вопросом — это возвращает разговор клиентке.</p>
+    </div>
+    <div class="section-meta"><span class="dot"></span>10 категорий</div>
+  </div>
+
+  <div class="obj-filter" id="obj-filter">
+    <button class="tag active" data-cat="all">Все</button>
+    <button class="tag" data-cat="time">Время</button>
+    <button class="tag" data-cat="money">Деньги</button>
+    <button class="tag" data-cat="think">Подумаю</button>
+    <button class="tag" data-cat="online">Онлайн</button>
+    <button class="tag" data-cat="other">Другая практика</button>
+    <button class="tag" data-cat="teachers">Хватает Тичерса</button>
+    <button class="tag" data-cat="exam">Экзамен / асаны</button>
+    <button class="tag" data-cat="emo">Эмоции</button>
+    <button class="tag" data-cat="ready">Не готова</button>
+    <button class="tag" data-cat="product">Что продаёте</button>
+  </div>
+
+  <div id="objections-list"></div>
+</section>
+
+<!-- ============================ TAB: СМЫСЛЫ И СТОП-ЛИСТ ============================ -->
+<section class="panel" id="panel-meanings" data-section="meanings">
+  <div class="panel-head">
+    <div>
+      <h2 id="meanings-anchor">Ключевые смыслы YOGO</h2>
+      <p class="lead">Держите в голове весь разговор. Возвращайтесь к ним, если разговор «уплывает».</p>
+    </div>
+  </div>
+
+  <div class="meanings">
+    <div class="meaning">Тело успевает за обучением</div>
+    <div class="meaning">YOGO — не ещё одна нагрузка, а поддержка</div>
+    <div class="meaning">Практика заточена под её модуль</div>
+    <div class="meaning">Маленькая группа до 8 человек</div>
+    <div class="meaning">Только студентки Академии — никаких посторонних</div>
+    <div class="meaning">Можно просто попробовать — без обязательств</div>
+  </div>
+
+  <div class="divider"></div>
+
+  <h2 id="forbidden" style="font-size:18px;margin:24px 0 14px">Чего нельзя делать</h2>
+  <div class="stoplist">
+    <h3>Стоп-лист менеджера</h3>
+    <ul>
+      <li><b>Не давить.</b> Никаких «ну что, берёте?», «решайте быстрее, мест мало», «у нас сегодня последний день».</li>
+      <li><b>Не продавать подписку на этапе пробного.</b> Цель первого звонка — только пробное занятие.</li>
+      <li><b>Не спорить.</b> Если она говорит «мне не подходит» — не доказывайте, что подходит. Спросите, что именно.</li>
+      <li><b>Не обесценивать Тичерс.</b> «Тичерс — одно, а у нас лучше» — категорически нет.</li>
+      <li><b>Не упрекать за пропуск.</b> «Вы не пришли», «вы пропустили» — заменяйте на «не получилось зайти».</li>
+      <li><b>Не давать скидки на пробное.</b> Пробное и так бесплатное.</li>
+      <li><b>Не звучать как робот.</b> Читать дословно — можно. Но добавляйте имя, паузы, «ага», «понимаю».</li>
+      <li><b>Не заполнять тишину.</b> После вопроса — пауза. 3–5 секунд молчания — это нормально.</li>
+      <li><b>Не обещать того, чего не знаете.</b> По удостоверению, часам практики, формату оплаты — уточняйте у руководства.</li>
+      <li><b>Не закрывать карточку клиента после «нет».</b> Сегодня неактуально — через 1–2 модуля может быть актуально.</li>
+    </ul>
+  </div>
+</section>
+
 </div>
 
-<!-- TABS -->
-<div class="nav-tabs">
-  <div class="tab active" onclick="showPage('funnel')" id="tab-funnel">
-    <span class="tab-dot" style="background:#6B8F5E"></span> Воронка &amp; Скрипт
-  </div>
-  <div class="tab" onclick="showPage('pains')" id="tab-pains">
-    <span class="tab-dot" style="background:#B8735A"></span> Боли студенток
-  </div>
-  <div class="tab" onclick="showPage('objections')" id="tab-objections">
-    <span class="tab-dot" style="background:#8B6847"></span> Возражения
-  </div>
-  <div class="tab" onclick="showPage('phrases')" id="tab-phrases">
-    <span class="tab-dot" style="background:#4E8077"></span> Фразы &amp; Правила
-  </div>
-  <div class="tab" onclick="showPage('triggers')" id="tab-triggers">
-    <span class="tab-dot" style="background:#B8963A"></span> Триггеры
-  </div>
-  <div class="tab" onclick="showPage('checklist')" id="tab-checklist">
-    <span class="tab-dot" style="background:#6B8F5E"></span> Чек-лист звонка
-  </div>
-</div>
-
-<!-- ████  PAGE: FUNNEL  ████ -->
-<div class="main">
-<div class="page active" id="page-funnel">
-  <div class="page-title">🌿 Воронка &amp; Скрипт звонка</div>
-
-  <div class="funnel-steps">
-
-    <!-- ЭТАП 0 -->
-    <div class="funnel-step" onclick="toggleStep(this)">
-      <div class="step-num" style="background:#EEE8DB;color:#7A6B55">0</div>
-      <div class="step-body">
-        <div class="step-title">📋 Подготовка — 30 сек</div>
-        <div class="step-sub">Перед контактом — смотрю карточку студентки</div>
-        <div class="step-detail">
-          <div class="script-box">
-            <span class="label">Что проверяю</span>
-            ✦ Поток и текущий модуль<br>
-            ✦ Кто наставница / куратор<br>
-            ✦ Были ли кастдевы — боль про практику / экзамен / асаны<br>
-            ✦ Активность на курсе — ходит ли на эфиры, сдаёт задания
-          </div>
-          <div class="tip"><b>Зачем:</b> в первой же фразе называю конкретику → студентка понимает, что это не спам, а персональный звонок</div>
-        </div>
-      </div>
-      <div class="step-chevron">⌄</div>
-    </div>
-
-    <!-- ЭТАП 1 -->
-    <div class="funnel-step" onclick="toggleStep(this)">
-      <div class="step-num" style="background:#E8F0E5;color:#6B8F5E">1</div>
-      <div class="step-body">
-        <div class="step-title">🚪 Открытие</div>
-        <div class="step-sub">Цель: согласие пообщаться 5–10 минут</div>
-        <div class="step-detail">
-          <div class="script-box">
-            <span class="label">📞 Звонок</span>
-            — Здравствуй, [Имя]! Это Ксения из YoGo — пространство регулярной практики студентов Тичерса. Удобно пообщаться минут 5–10? Я по твоему обучению, не по админке, а по практике.<br><br>
-            [Пауза — жду ответа]<br><br>
-            — Супер. <b>Называю конкретику из карточки:</b> вижу, что ты сейчас на [Х модуле]. Мы создали пространство регулярной практики для студентов, которые уже обучаются на Тичерсе и хотят подтянуть личную практику параллельно. Хочу рассказать тебе в двух словах и узнать — актуально или нет для тебя такой опыт.
-          </div>
-          <div class="script-box brown" style="margin-top:10px">
-            <span class="label">💬 Переписка</span>
-            Здравствуй, [Имя]! 👋 Это Ксения из YoGo — пространство регулярной практики для студентов Тичерса.<br><br>
-            Пишу по твоему обучению, не по учебке — <b>по личной практике</b>. Хочу рассказать коротко — актуально или нет, посмотришь сама? 🙌
-          </div>
-        </div>
-      </div>
-      <div class="step-chevron">⌄</div>
-    </div>
-
-    <!-- ЭТАП 2 -->
-    <div class="funnel-step" onclick="toggleStep(this)">
-      <div class="step-num" style="background:#F5EDE3;color:#B8735A">2</div>
-      <div class="step-body">
-        <div class="step-title">🎙 Квалификация</div>
-        <div class="step-sub">Слушаю, запоминаю формулировки дословно</div>
-        <div class="step-detail">
-          <div class="script-box pink">
-            <span class="label">Вопрос 1 — текущая практика</span>
-            — Расскажи, как сейчас у тебя с практикой <b>вне курса</b>? Получается регулярно? Сколько раз в неделю примерно?
-          </div>
-          <div class="script-box pink" style="margin-top:10px">
-            <span class="label">Вопрос 2 — желаемые изменения</span>
-            — Каких изменений тебе бы хотелось? Например, ты занимаешься 3 месяца и доходишь до идеального для себя результата — как это должно выглядеть? Можешь описать?
-          </div>
-          <div class="script-box pink" style="margin-top:10px">
-            <span class="label">Вопрос 3 — барьер</span>
-            — А что мешает сейчас? Что главное?
-          </div>
-          <div class="script-box" style="margin-top:10px">
-            <span class="label">Доп. — если модуль 6+</span>
-            — А экзамен по личной практике — как сейчас себя в нём чувствуешь?
-          </div>
-          <div class="tip"><b>Главное:</b> её слова запоминаю дословно — именно их проговорю в презентации как зеркало</div>
-        </div>
-      </div>
-      <div class="step-chevron">⌄</div>
-    </div>
-
-    <!-- ЭТАП 3 -->
-    <div class="funnel-step" onclick="toggleStep(this)">
-      <div class="step-num" style="background:#E8F0E5;color:#6B8F5E">3</div>
-      <div class="step-body">
-        <div class="step-title">✨ Презентация — зеркалим боли клиентки</div>
-        <div class="step-sub">Её слова → показываю, как продукт их закрывает</div>
-        <div class="step-detail">
-
-          <div class="script-box">
-            <span class="label">Блок 1 — Что это</span>
-            — YoGo — это пространство регулярной практики для действующих студентов Тичерса. 8 занятий в месяц в живом эфире, в группах до 8 человек, с опытными наставницами, которые знают твой учебный трек.
-          </div>
-
-          <div class="script-box pink" style="margin-top:12px">
-            <span class="label">Блок 2 — Попадание в боль (её слова!)</span>
-
-            <b>Если нет регулярности:</b><br>
-            — Как ты только что сказала, хочется регулярности, но не получается. Вот именно это мы и сделали в YoGo: расписание стоит, группа ждёт, наставница видит тебя на экране. Слиться можно, но не хочется — совсем не как с записями.<br><br>
-
-            <b>Если сложные асаны:</b><br>
-            — Ты упомянула [вставляю асану, которую назвала — например, чатурангу]. У нас будут тематические недели ровно под эти формы. Наставница разбирает подводящие, правит в моменте, до тех пор пока форма не встанет для тебя оптимальным образом.<br><br>
-
-            <b>Если боюсь экзамена:</b><br>
-            — Ну смотри, ты сейчас на [Х модуле], до экзамена [N месяцев]. Наставницы YoGo — это люди, которые ранее прошли обучение в академии, сейчас успешно работают и ведут частную практику. Та же Татьяна Оз — думаю, ты могла слышать. Они за 2–3 месяца доводят твою практику до уровня, с которым ты спокойно и уверенно выйдешь в большой мир.
-          </div>
-
-          <div class="script-box brown" style="margin-top:12px">
-            <span class="label">Блок 3 — Почему мы, а не «любая онлайн-йога»</span>
-            1️⃣ Наставницы знают твой учебный трек — практика идёт параллельно модулям курса<br>
-            2️⃣ Группа до 8 человек — каждой достаётся внимание и правка в моменте<br>
-            3️⃣ Наставница помнит тебя от занятия к занятию — знает, где проседает, куда ведёт<br>
-            4️⃣ <b>Официальный документ:</b> все занятия фиксируются. По окончании ты получаешь удостоверение — идёт как приложение к диплому, вносится в ФИС ФРДО. Это документально подтверждённый опыт практики, который очень ценится при выходе в работу — потому что у большинства выпускников теория есть, а вот подтверждённый опыт — нет.
-          </div>
-
-          <div class="script-box yellow" style="margin-top:12px">
-            <span class="label">Блок 4 — Цена · спокойно, без продажной интонации</span>
-            — Абонемент предусматривает 8 занятий в месяц — это примерно 2 раза в неделю по часу. Одно занятие — <b>1 000 ₽</b>. С учётом того, что группы не более 8 человек, получается максимально персональный подход и большое внимание каждой из вас.
-          </div>
-        </div>
-      </div>
-      <div class="step-chevron">⌄</div>
-    </div>
-
-    <!-- ЭТАП 4 -->
-    <div class="funnel-step" onclick="toggleStep(this)">
-      <div class="step-num" style="background:#E8F0E5;color:#6B8F5E">4</div>
-      <div class="step-body">
-        <div class="step-title">🤝 Закрытие — прямой вопрос</div>
-        <div class="step-sub">Пауза! Молчу, даю ответить первой</div>
-        <div class="step-detail">
-          <div class="script-box">
-            <span class="label">Вопрос закрытия</span>
-            — Как тебе такой формат? Как думаешь, поможет ли это реализовать то, о чём ты говорила?<br>
-            <br>
-            [Пауза — жду, молчу, даю ответить первой]
-          </div>
-
-          <div class="resp-grid" style="margin-top:12px">
-            <div class="resp-card" style="background:#EDF5EA;border-color:#C5DCC0">
-              <div style="color:#4E7D42;font-weight:700;margin-bottom:4px;font-size:13px">«Да, где платить»</div>
-              <span style="font-size:13px;color:#2A1F12">→ Сразу к оплате. Ничего не добавляю.</span>
-            </div>
-            <div class="resp-card" style="background:#F5F0E0;border-color:#D5C098">
-              <div style="color:#B8963A;font-weight:700;margin-bottom:4px;font-size:13px">«Интересно, но…»</div>
-              <span style="font-size:13px;color:#2A1F12">→ Возражение → блок возражений</span>
-            </div>
-            <div class="resp-card" style="background:#F5EDE3;border-color:#D5B898">
-              <div style="color:#B8735A;font-weight:700;margin-bottom:4px;font-size:13px">«Мне нужно подумать»</div>
-              <span style="font-size:13px;color:#2A1F12">→ «О чём именно?» → возражения</span>
-            </div>
-            <div class="resp-card" style="background:#EEE8DB;border-color:#D5C9B5">
-              <div style="color:#8B6847;font-weight:700;margin-bottom:4px;font-size:13px">«Не моё / не сейчас»</div>
-              <span style="font-size:13px;color:#2A1F12">→ «Что именно — формат, цена, время?»</span>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="step-chevron">⌄</div>
-    </div>
-
-    <!-- ЭТАП 5 -->
-    <div class="funnel-step" onclick="toggleStep(this)">
-      <div class="step-num" style="background:#F5F0E0;color:#B8963A">5</div>
-      <div class="step-body">
-        <div class="step-title">💳 Оплата и онбординг</div>
-        <div class="step-sub">Перевести «да» в оплату до конца разговора</div>
-        <div class="step-detail">
-          <div class="script-box yellow">
-            <span class="label">Шаг 1 — фиксирую «да»</span>
-            — Отлично. Тогда фиксирую: абонемент 8 000 ₽, 8 занятий, стартуем с ближайшего потока [дата]. Расписание пришлю — там два слота в неделю, выберешь удобные.
-          </div>
-          <div class="script-box yellow" style="margin-top:10px">
-            <span class="label">Шаг 2 — способ оплаты</span>
-            — Ссылка действует до 12 часов ночи в день выставления. Будешь оплачивать сегодня или завтра?
-            <div class="self-note">Проверяю, насколько студентка замотивирована</div>
-          </div>
-          <div class="script-box yellow" style="margin-top:10px">
-            <span class="label">Шаг 3 — мягкое ограничение</span>
-            — Группа до 8 человек, места закрываются по мере оплаты. Сейчас ещё есть твой слот — давай зафиксируем?
-          </div>
-          <div class="script-box yellow" style="margin-top:10px">
-            <span class="label">Шаг 4 — после оплаты</span>
-            — Техническая реализация онбординга в процессе — ждёт дополнение ✌️
-          </div>
-          <div class="tip"><b>Важно:</b> если уходит на «подумаю» — фиксирую конкретную дату следующего касания. Без даты — теряю лид.</div>
-        </div>
-      </div>
-      <div class="step-chevron">⌄</div>
-    </div>
-
-  </div><!-- /funnel-steps -->
-</div>
-
-<!-- ████  PAGE: PAINS  ████ -->
-<div class="page" id="page-pains">
-  <div class="page-title">💥 Боли студенток — 7 паттернов</div>
-
-  <div class="pains-grid">
-
-    <div class="pain-card" onclick="togglePain(this)">
-      <div class="pain-header">
-        <div class="pain-icon" style="background:#F5EDE3">⏰</div>
-        <div>
-          <div class="pain-title">«Нет времени, нет системы»</div>
-          <div class="pain-freq" style="background:#F5EDE3;color:#B8735A">~60% кастдевов · Паттерн #1</div>
-        </div>
-      </div>
-      <div class="pain-body">
-        <div class="quote-chip" style="border-color:#B8735A">«Главная сложность — иногда себя заставить. Отговорок больше, чем практики.»</div>
-        <div class="quote-chip" style="border-color:#B8735A">«Когда сама занимаешься — можно пропустить. Когда тебя ждут — не так легко слиться.»</div>
-        <div class="close-line">YoGo снимает решение «идти или нет» — расписание стоит, группа ждёт, наставница знает твоё имя.</div>
-      </div>
-    </div>
-
-    <div class="pain-card" onclick="togglePain(this)">
-      <div class="pain-header">
-        <div class="pain-icon" style="background:#E8F0E5">👁</div>
-        <div>
-          <div class="pain-title">«Нужна живая обратная связь»</div>
-          <div class="pain-freq" style="background:#E8F0E5;color:#4E7D42">Очень частая · Паттерн #2</div>
-        </div>
-      </div>
-      <div class="pain-body">
-        <div class="quote-chip" style="border-color:#6B8F5E">«По записям неэффективно — нужна обратная связь от преподавателя.»</div>
-        <div class="quote-chip" style="border-color:#6B8F5E">«Варимся в собственном соку. Какие ошибки — тянем их с собой.»</div>
-        <div class="close-line">YoGo — живой эфир, наставница тебя видит. Группа до 8 — каждой достаётся индивидуальная правка в моменте.</div>
-      </div>
-    </div>
-
-    <div class="pain-card" onclick="togglePain(this)">
-      <div class="pain-header">
-        <div class="pain-icon" style="background:#EEE8DB">😰</div>
-        <div>
-          <div class="pain-title">«Тревога перед экзаменом»</div>
-          <div class="pain-freq" style="background:#EEE8DB;color:#8B6847">Модули 6–8 · Паттерн #3</div>
-        </div>
-      </div>
-      <div class="pain-body">
-        <div class="quote-chip" style="border-color:#8B6847">«Вылетит из головы. Волнение блокирует интеллект.»</div>
-        <div class="quote-chip" style="border-color:#8B6847">«К концу обучения — перегруз, страх перед экзаменом.»</div>
-        <div class="close-line">Наставницы YoGo за 2–3 месяца доводят практику до уровня, с которым идут спокойно и уверенно.</div>
-      </div>
-    </div>
-
-    <div class="pain-card" onclick="togglePain(this)">
-      <div class="pain-header">
-        <div class="pain-icon" style="background:#E8F0E8">🤸</div>
-        <div>
-          <div class="pain-title">«Хочу дожать сложные асаны»</div>
-          <div class="pain-freq" style="background:#E8F0E8;color:#4E8077">~40% · Паттерн #4</div>
-        </div>
-      </div>
-      <div class="pain-body">
-        <div class="quote-chip" style="border-color:#4E8077">«Пытаюсь добиться чатуранги — не выхожу в неё.»</div>
-        <div class="quote-chip" style="border-color:#4E8077">«Стойки — очень актуально. Если бы были такие занятия, я бы старалась попасть.»</div>
-        <div class="close-line">Тематические недели под конкретные формы. Наставница работает с тобой, пока форма не встанет оптимальным образом.</div>
-      </div>
-    </div>
-
-    <div class="pain-card" onclick="togglePain(this)">
-      <div class="pain-header">
-        <div class="pain-icon" style="background:#E8F0E5">👥</div>
-        <div>
-          <div class="pain-title">«Одной сложно, нет системы»</div>
-          <div class="pain-freq" style="background:#E8F0E5;color:#4E7D42">Стабильно · Паттерн #5</div>
-        </div>
-      </div>
-      <div class="pain-body">
-        <div class="quote-chip" style="border-color:#6B8F5E">«Мне важен клуб единомышленников — обмен энергией, группа до 5 человек.»</div>
-        <div class="quote-chip" style="border-color:#6B8F5E">«В группе можно на других увидеть то, что у себя не заметишь.»</div>
-        <div class="close-line">Группа до 8 — микро-сообщество по потоку. Вы идёте по одной программе. Не анонимный онлайн, а ребята с курса.</div>
-      </div>
-    </div>
-
-    <div class="pain-card" onclick="togglePain(this)">
-      <div class="pain-header">
-        <div class="pain-icon" style="background:#F5F0E0">💸</div>
-        <div>
-          <div class="pain-title">«Хожу к сторонним преподавателям»</div>
-          <div class="pain-freq" style="background:#F5F0E0;color:#B8963A">~30% · Паттерн #6</div>
-        </div>
-      </div>
-      <div class="pain-body">
-        <div class="quote-chip" style="border-color:#B8963A">«Покупаю уроки в МН, марафон по чатуранге, урок с Ириной Павловой.»</div>
-        <div class="close-line">Вместо сборки по кускам — наставница, которая знает твою программу. За 8 000 ₽ вместо 15–20 тысяч на сторонние подписки.</div>
-      </div>
-    </div>
-
-    <div class="pain-card" onclick="togglePain(this)">
-      <div class="pain-header">
-        <div class="pain-icon" style="background:#F5EDE3">😟</div>
-        <div>
-          <div class="pain-title">«Страх не стать преподавателем»</div>
-          <div class="pain-freq" style="background:#F5EDE3;color:#B8735A">Старшие модули · Паттерн #7</div>
-        </div>
-      </div>
-      <div class="pain-body">
-        <div class="quote-chip" style="border-color:#B8735A">«Страх, что не найду клиентов.»</div>
-        <div class="quote-chip" style="border-color:#B8735A">«Уже не уверена, что хочу преподавать — не готова к большому потоку.»</div>
-        <div class="close-line">В YoGo насматриваешься, как ведут наставницы разного стиля. К выпуску — готовые «шаблоны» урока в голове и официально подтверждённый опыт практики.</div>
-      </div>
-    </div>
-
-  </div>
-</div>
-
-<!-- ████  PAGE: OBJECTIONS  ████ -->
-<div class="page" id="page-objections">
-  <div class="page-title">🛡 Отработка возражений</div>
-  <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Схема ПАРР: <b>П</b>рисоединяюсь → <b>А</b>ргумент → <b>Р</b>еальная ценность → <b>Р</b>еверс-вопрос</p>
-
-  <div class="obj-list">
-
-    <div class="obj-item" onclick="toggleObj(this)">
-      <div class="obj-trigger"><div class="obj-num">1</div><div class="obj-title">Нет времени / не успеваю</div><div class="step-chevron">⌄</div></div>
-      <div class="obj-body">
-        <div class="self-note" style="margin-bottom:12px">6 из 10 студенток называют именно это — самое частое</div>
-        <div class="parr-step"><div class="parr-label" style="background:#E8F0E5;color:#6B8F5E">П</div><div class="parr-text">— Да, это самое частое, что слышу — и совершенно понимаю, откуда это ощущение берётся.</div></div>
-        <div class="parr-step"><div class="parr-label" style="background:#EEE8DB;color:#8B6847">А</div><div class="parr-text">— Смотри: ты и сейчас как-то выделяешь время на практику — просто бессистемно, без расписания. YoGo — это ровно 2 часа в неделю, которые уже стоят в календаре. Не нужно каждый раз решать, что делать сегодня на коврике.</div></div>
-        <div class="parr-step"><div class="parr-label" style="background:#E8F0E8;color:#4E8077">РЦ</div><div class="parr-text">— Студентки в кастдевах говорили именно об этом: когда сама занимаешься — легко пропустить. Когда тебя ждут — слиться уже совсем другое дело.</div></div>
-        <div class="parr-step"><div class="parr-label" style="background:#F5F0E0;color:#B8963A">Р</div><div class="parr-text">— Скажи, если бы у тебя было два фиксированных часа в неделю — в какие дни было бы комфортнее? Просто посмотрим теоретически, как это могло бы выглядеть.</div></div>
-      </div>
-    </div>
-
-    <div class="obj-item" onclick="toggleObj(this)">
-      <div class="obj-trigger"><div class="obj-num">2</div><div class="obj-title">Дорого / 8 000 ₽ — это много</div><div class="step-chevron">⌄</div></div>
-      <div class="obj-body">
-        <div class="parr-step"><div class="parr-label" style="background:#E8F0E5;color:#6B8F5E">П</div><div class="parr-text">— Понимаю — сумма не маленькая, и рада, что говоришь об этом открыто, а не просто ладно.</div></div>
-        <div class="parr-step"><div class="parr-label" style="background:#EEE8DB;color:#8B6847">А</div><div class="parr-text">— Смотри на цифры честно: у именных педагогов занятие от 1 500 до 2 500 ₽, в индивидуалках — от 3 000 до 5 000 ₽. Здесь — 1 000 ₽ за урок. И при этом педагог знает твой учебный трек, твой модуль и твой личный кейс.</div></div>
-        <div class="parr-step"><div class="parr-label" style="background:#E8F0E8;color:#4E8077">РЦ</div><div class="parr-text">— Это единственный формат практики, где наставница ведёт тебя параллельно курсу — не в вакууме, а прямо под твой экзамен.</div></div>
-        <div class="parr-step"><div class="parr-label" style="background:#F5F0E0;color:#B8963A">Р</div><div class="parr-text">— Если отвлечься от суммы на секунду — сам формат тебе откликается? Группа до 8 человек, живая обратная связь от своего педагога?</div></div>
-      </div>
-    </div>
-
-    <div class="obj-item" onclick="toggleObj(this)">
-      <div class="obj-trigger"><div class="obj-num">3</div><div class="obj-title">Я хожу в студию / занимаюсь у другого педагога</div><div class="step-chevron">⌄</div></div>
-      <div class="obj-body">
-        <div class="parr-step"><div class="parr-label" style="background:#E8F0E5;color:#6B8F5E">П</div><div class="parr-text">— Это здорово — значит, живая практика для тебя уже в приоритете, и ты точно понимаешь её ценность.</div></div>
-        <div class="parr-step"><div class="parr-label" style="background:#EEE8DB;color:#8B6847">А</div><div class="parr-text">— YoGo не заменяет то, куда ты ходишь — дополняет. Разница в одном: наставница здесь знает, что ты на Тичерсе, знает твои модули и знает, к чему именно тебе нужно прийти в технике. В студии — общая практика для всех. Здесь — точечная работа под твой экзамен.</div></div>
-        <div class="parr-step"><div class="parr-label" style="background:#E8F0E8;color:#4E8077">РЦ</div><div class="parr-text">— В больших онлайн-группах 30–50 человек, анонимность. Здесь — до 8, правки по имени прямо в моменте. Это другой уровень внимания.</div></div>
-        <div class="parr-step"><div class="parr-label" style="background:#F5F0E0;color:#B8963A">Р</div><div class="parr-text">— Скажи, твой нынешний педагог знает, что ты на программе Тичерс и к чему нужно прийти до экзамена?</div></div>
-      </div>
-    </div>
-
-    <div class="obj-item" onclick="toggleObj(this)">
-      <div class="obj-trigger"><div class="obj-num">4</div><div class="obj-title">Разберусь сама / посмотрю записи</div><div class="step-chevron">⌄</div></div>
-      <div class="obj-body">
-        <div class="parr-step"><div class="parr-label" style="background:#E8F0E5;color:#6B8F5E">П</div><div class="parr-text">— Да, записи удобны и всегда доступны, понимаю этот выбор.</div></div>
-        <div class="parr-step"><div class="parr-label" style="background:#EEE8DB;color:#8B6847">А</div><div class="parr-text">— Но вот в чём штука: по записям ты не видишь себя со стороны. Ошибки в технике не слышны изнутри — копятся незаметно. Студентки в кастдевах говорили именно об этом: варимся в собственном соку, тянем ошибки с собой.</div></div>
-        <div class="parr-step"><div class="parr-label" style="background:#E8F0E8;color:#4E8077">РЦ</div><div class="parr-text">— Живая обратная связь от наставницы прямо в моменте — это то, что реально меняет технику. Без этого прогресс есть, но медленнее, и есть риск закрепить неправильное в теле.</div></div>
-        <div class="parr-step"><div class="parr-label" style="background:#F5F0E0;color:#B8963A">Р</div><div class="parr-text">— Есть что-то в практике прямо сейчас — асана или переход — что пробуешь снова и снова, а ощущения что получается всё нет?</div></div>
-      </div>
-    </div>
-
-    <div class="obj-item" onclick="toggleObj(this)">
-      <div class="obj-trigger"><div class="obj-num">5</div><div class="obj-title">У меня и так много нагрузки по курсу</div><div class="step-chevron">⌄</div></div>
-      <div class="obj-body">
-        <div class="parr-step"><div class="parr-label" style="background:#E8F0E5;color:#6B8F5E">П</div><div class="parr-text">— Слышу тебя — Тичерс правда насыщенная программа, и чувствовать что уже много — это абсолютно нормально.</div></div>
-        <div class="parr-step"><div class="parr-label" style="background:#EEE8DB;color:#8B6847">А</div><div class="parr-text">— YoGo — это не ещё одно обучение поверх. Это практика, которая идёт параллельно тому, что ты уже проходишь, и синхронизирована с твоими модулями. Занятие стоит в расписании, программа готова. Просто прийти — и всё.</div></div>
-        <div class="parr-step"><div class="parr-label" style="background:#E8F0E8;color:#4E8077">РЦ</div><div class="parr-text">— Многие студентки говорят, что именно YoGo помогает курсу осесть в теле — теория из модулей сразу проживается в живой практике, а не остаётся в голове.</div></div>
-        <div class="parr-step"><div class="parr-label" style="background:#F5F0E0;color:#B8963A">Р</div><div class="parr-text">— На каком ты сейчас модуле? Что из практики хочется укрепить прямо в этот период?</div></div>
-      </div>
-    </div>
-
-    <div class="obj-item" onclick="toggleObj(this)">
-      <div class="obj-trigger"><div class="obj-num">6</div><div class="obj-title">Мне рано — я ещё на начальных модулях</div><div class="step-chevron">⌄</div></div>
-      <div class="obj-body">
-        <div class="parr-step"><div class="parr-label" style="background:#E8F0E5;color:#6B8F5E">П</div><div class="parr-text">— Понимаю — кажется, что сначала нужно пройти больше теории, и уже потом практиковаться по-настоящему.</div></div>
-        <div class="parr-step"><div class="parr-label" style="background:#EEE8DB;color:#8B6847">А</div><div class="parr-text">— На самом деле именно сейчас идеальное время. Пока база только формируется, наставница сразу ставит технику правильно. Те, кто начинает с ранних модулей, к экзамену приходят с уверенной, чистой практикой — без накопленных ошибок, которые потом сложно переучивать.</div></div>
-        <div class="parr-step"><div class="parr-label" style="background:#E8F0E8;color:#4E8077">РЦ</div><div class="parr-text">— Наставницы YoGo — люди, которые прошли обучение в академии, успешно работают и ведут частную практику. Они точно знают, на что смотрят на экзамене, и строят работу именно вокруг этого с самого начала.</div></div>
-        <div class="parr-step"><div class="parr-label" style="background:#F5F0E0;color:#B8963A">Р</div><div class="parr-text">— Есть уже сейчас что-то в практике, что чувствуется неустойчиво — какая-то асана или просто ощущение, что не хватает фундамента?</div></div>
-      </div>
-    </div>
-
+<!-- ====== SIDEBAR ====== -->
+<aside class="sidebar">
+  <div class="r-card" id="goal-card">
+    <h3>🎯 Цель этапа</h3>
+    <div class="r-goal" id="r-goal">Прочитайте «Главную логику» перед первым звонком — это компас для всего разговора.</div>
   </div>
 
-  <!-- СПЕЦИАЛЬНЫЙ БЛОК: ПОДУМАЮ -->
-  <div style="margin-top:20px;background:#FFFFFF;border:2px solid #8B6847;border-radius:var(--radius);overflow:hidden;">
-    <div style="background:#8B6847;padding:13px 20px;display:flex;align-items:center;gap:10px;">
-      <span style="font-size:16px">⚠️</span>
-      <span style="color:#FFFFFF;font-weight:700;font-size:15px">Я подумаю</span>
-      <span style="color:rgba(255,255,255,0.7);font-size:12px;margin-left:4px">— специальный блок</span>
+  <div class="r-card notes-card">
+    <h3>
+      📝 Рабочие заметки
+      <span class="notes-count" id="notes-count">0</span>
+    </h3>
+    <input id="note-input" type="text" class="note-input" placeholder="Лена Иванова — сомнение в онлайне, вт 14:00" autocomplete="off" spellcheck="false">
+    <div class="notes-search-wrap">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input id="notes-search" type="text" placeholder="Поиск по имени или тексту" autocomplete="off">
     </div>
-    <div style="padding:14px 20px 6px;">
-      <div class="tip" style="margin-top:0;margin-bottom:14px">
-        <b>Правило:</b> подумаю без конкретной даты возврата = потерянный контакт. Цель — не давить, а мягко вскрыть и зафиксировать следующий шаг.
-      </div>
-
-      <div class="obj-list" style="gap:6px;">
-
-        <div class="obj-item" onclick="toggleObj(this)" style="border-color:#D5C9B5;">
-          <div class="obj-trigger" style="padding:12px 16px;">
-            <div style="min-width:28px;height:28px;background:#EEE8DB;border:1px solid #D5C9B5;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#8B6847;flex-shrink:0;">1</div>
-            <div class="obj-title" style="font-size:14px;">Нормализация + мягкое вскрытие</div>
-            <div class="step-chevron">⌄</div>
-          </div>
-          <div class="obj-body">
-            <div class="parr-text" style="padding-top:0;">— Конечно, понимаю — это не спонтанное решение. Можно просто уточню: что сейчас больше всего тормозит — вопрос суммы, расписание, или что-то ещё? Просто чтобы понимала, чем могу помочь разобраться.</div>
-            <div class="self-note">Пауза 5 секунд — молчу, даю ответить</div>
-          </div>
-        </div>
-
-        <div class="obj-item" onclick="toggleObj(this)" style="border-color:#D5C9B5;">
-          <div class="obj-trigger" style="padding:12px 16px;">
-            <div style="min-width:28px;height:28px;background:#EEE8DB;border:1px solid #D5C9B5;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#8B6847;flex-shrink:0;">2</div>
-            <div class="obj-title" style="font-size:14px;">Микро-коммитмент</div>
-            <div class="step-chevron">⌄</div>
-          </div>
-          <div class="obj-body">
-            <div class="parr-text" style="padding-top:0;">— Окей, услышала! Давай пришлю тебе короткое видео с живого занятия — буквально 3 минуты, чтобы ты почувствовала формат изнутри. Посмотришь сегодня вечером?</div>
-            <div class="self-note">После да — фиксирую: тогда напишу тебе завтра в [время] — удобно?</div>
-          </div>
-        </div>
-
-        <div class="obj-item" onclick="toggleObj(this)" style="border-color:#D5C9B5;">
-          <div class="obj-trigger" style="padding:12px 16px;">
-            <div style="min-width:28px;height:28px;background:#EEE8DB;border:1px solid #D5C9B5;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#8B6847;flex-shrink:0;">3</div>
-            <div class="obj-title" style="font-size:14px;">Будущее проецирование</div>
-            <div class="step-chevron">⌄</div>
-          </div>
-          <div class="obj-body">
-            <div class="parr-text" style="padding-top:0;">— Слышу. Скажи, если ты решишь да — когда тебе реалистично было бы к этому вернуться? Хочу зафиксировать под тебя слот, пока группа не закрылась.</div>
-          </div>
-        </div>
-
-        <div class="obj-item" onclick="toggleObj(this)" style="border-color:#D5C9B5;">
-          <div class="obj-trigger" style="padding:12px 16px;">
-            <div style="min-width:28px;height:28px;background:#EEE8DB;border:1px solid #D5C9B5;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#8B6847;flex-shrink:0;">4</div>
-            <div class="obj-title" style="font-size:14px;">Зеркало ценности</div>
-            <div class="step-chevron">⌄</div>
-          </div>
-          <div class="obj-body">
-            <div class="parr-text" style="padding-top:0;">— Понимаю, не тороплю. Мне важно, чтобы решение было твоим и комфортным. Скажи — что должно сложиться, чтобы это чувствовалось как да, момент правильный?</div>
-          </div>
-        </div>
-
-      </div>
-    </div>
-    <div style="height:14px;"></div>
-  </div>
-
-</div>
-
-<!-- ████  PAGE: PHRASES  ████ -->
-<div class="page" id="page-phrases">
-  <div class="page-title">💬 Ключевые фразы &amp; Правила</div>
-
-  <div class="phrases-grid">
-    <div class="phrase-card">
-      <span class="phrase-tag" style="color:#6B8F5E">ЧТО ЭТО</span>
-      <div class="phrase-text">«Пространство регулярной практики для действующих студентов Тичерса»</div>
-    </div>
-    <div class="phrase-card">
-      <span class="phrase-tag" style="color:#4E8077">УТП В ОДНОЙ ФРАЗЕ</span>
-      <div class="phrase-text">«Практика с наставницей, которая знает твой курс, твой поток и твой кейс»</div>
-    </div>
-    <div class="phrase-card">
-      <span class="phrase-tag" style="color:#B8963A">ЦЕНА</span>
-      <div class="phrase-text">«8 000 ₽ / месяц. 1 000 ₽ за занятие с наставницей в группе до 8 человек»</div>
-    </div>
-    <div class="phrase-card" style="border-color:#C5DCC0">
-      <span class="phrase-tag" style="color:#4E7D42">ЦИТАТА #1 · нет регулярности</span>
-      <div class="phrase-text">«Когда сама занимаешься — можно пропустить. Когда тебя ждут — не так легко слиться.»</div>
-      <div class="phrase-use">→ закрываем «нет регулярности»</div>
-    </div>
-    <div class="phrase-card" style="border-color:#D5C9B5">
-      <span class="phrase-tag" style="color:#8B6847">ЦИТАТА #2 · платформа с записями</span>
-      <div class="phrase-text">«По записям неэффективно — нужна обратная связь от преподавателя.»</div>
-      <div class="phrase-use">→ закрываем «у нас же есть записи»</div>
-    </div>
-    <div class="phrase-card" style="border-color:#D5C098">
-      <span class="phrase-tag" style="color:#B8963A">ЦИТАТА #3 · хочу индивидуально</span>
-      <div class="phrase-text">«В группе можно на других увидеть то, что у себя не заметишь.»</div>
-      <div class="phrase-use">→ закрываем «хочу индивидуально»</div>
+    <div class="notes-list" id="notes-list"></div>
+    <div class="notes-meta">
+      <span title="Заметки автоматически удаляются через 10 часов">Очищаются через 10 часов</span>
+      <button id="notes-clear-all" type="button">Очистить все</button>
     </div>
   </div>
+</aside>
 
-  <div class="no-list">
-    <div class="no-list-title">🚫 Чего НЕ делать</div>
-    <div class="no-item"><span class="no-icon">✗</span>«Когда тебе удобно?» — даю <b>2 конкретных слота</b> на выбор</div>
-    <div class="no-item"><span class="no-icon">✗</span>«Хочешь купить?» — «Идём в ближайший поток?»</div>
-    <div class="no-item"><span class="no-icon">✗</span>Молчать после «дорого» — разбираем на слои</div>
-    <div class="no-item"><span class="no-icon">✗</span>Обещать скидку — нет скидок, есть ценность</div>
-    <div class="no-item"><span class="no-icon">✗</span>«Ты точно сдашь экзамен» — помогаем подготовиться, гарантий нет</div>
-    <div class="no-item"><span class="no-icon">✗</span>Обещать «как 1-на-1» — формат групповой, но с персональным подходом</div>
-    <div class="no-item"><span class="no-icon">✗</span>Снижать цену по первому возражению — сначала усилить ценность</div>
-    <div class="no-item"><span class="no-icon">✗</span>«Подумаю» без даты — <b>всегда фиксирую время следующего контакта</b></div>
-  </div>
-</div>
+</main>
 
-<!-- ████  PAGE: TRIGGERS  ████ -->
-<div class="page" id="page-triggers">
-  <div class="page-title">⚡ Горячие триггеры</div>
-  <p style="font-size:13px;color:var(--muted);margin-bottom:16px">3 ситуации, когда продавать проще всего</p>
+<div class="toast" id="toast">Скопировано в буфер</div>
 
-  <div class="triggers-row">
-    <div class="trigger-card" style="border-color:#DDB8A8">
-      <div class="trigger-emoji">😰</div>
-      <div class="trigger-num" style="color:#B8735A">Триггер #1</div>
-      <div class="trigger-title">Модуль 5–8 + экзамен</div>
-      <div class="trigger-desc">Упоминает экзамен. <b>Самый сильный эмоциональный драйвер</b> — тревога «не успею», «забуду», «не сдам».</div>
-      <div class="trigger-action">→ «Наставницы YoGo — те же люди, которые знают академию изнутри. Они готовят именно к этому.»</div>
-    </div>
-    <div class="trigger-card" style="border-color:#D5C098">
-      <div class="trigger-emoji">💸</div>
-      <div class="trigger-num" style="color:#B8963A">Триггер #2</div>
-      <div class="trigger-title">Платит сторонним</div>
-      <div class="trigger-desc">Ходит к Павловой, Оз, в студию. <b>Уже готова тратить на практику</b> — нужно показать, что YoGo точнее и выгоднее.</div>
-      <div class="trigger-action">→ «Замени одну подписку. За те же деньги — наставница, которая знает твой трек.»</div>
-    </div>
-    <div class="trigger-card" style="border-color:#C5DCC0">
-      <div class="trigger-emoji">🤸</div>
-      <div class="trigger-num" style="color:#4E7D42">Триггер #3</div>
-      <div class="trigger-title">Называет конкретную асану</div>
-      <div class="trigger-desc">Чатуранга, ширшасана, пинча, балансы — <b>конкретный запрос</b>. Закрываю обещанием тематических недель.</div>
-      <div class="trigger-action">→ «У нас есть тематические недели — ровно под эту форму. Пока не встанет оптимально.»</div>
-    </div>
-  </div>
-</div>
-
-<!-- ████  PAGE: CHECKLIST  ████ -->
-<div class="page" id="page-checklist">
-  <div class="page-title">✅ Чек-лист звонка</div>
-  <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Нажимай на пункты — они отмечаются. Кнопка внизу сбрасывает для нового звонка.</p>
-
-  <div class="checklist-grid">
-
-    <div class="check-section">
-      <div class="check-title" style="color:#7A6B55">🔲 До звонка</div>
-      <div class="check-item" onclick="toggleCheck(this)"><div class="checkmark"></div>Открыла карточку студентки (поток, модуль)</div>
-      <div class="check-item" onclick="toggleCheck(this)"><div class="checkmark"></div>Нашла кастдев или заметки по боли</div>
-      <div class="check-item" onclick="toggleCheck(this)"><div class="checkmark"></div>Знаю имя наставницы / куратора</div>
-      <div class="check-item" onclick="toggleCheck(this)"><div class="checkmark"></div>Проверила активность (эфиры, задания)</div>
-      <div class="check-item" onclick="toggleCheck(this)"><div class="checkmark"></div>Готова назвать конкретику с первой фразы</div>
-    </div>
-
-    <div class="check-section">
-      <div class="check-title" style="color:#6B8F5E">🎙 Во время звонка</div>
-      <div class="check-item" onclick="toggleCheck(this)"><div class="checkmark"></div>Открытие: «удобно пообщаться 5–10 минут?» — дождалась ответа</div>
-      <div class="check-item" onclick="toggleCheck(this)"><div class="checkmark"></div>Задала 3 квалификационных вопроса</div>
-      <div class="check-item" onclick="toggleCheck(this)"><div class="checkmark"></div>Записала дословные слова про боль / идеал / барьер</div>
-      <div class="check-item" onclick="toggleCheck(this)"><div class="checkmark"></div>Презентация: зеркалила её слова, не свои</div>
-      <div class="check-item" onclick="toggleCheck(this)"><div class="checkmark"></div>После закрытого вопроса — дала паузу и молчала</div>
-      <div class="check-item" onclick="toggleCheck(this)"><div class="checkmark"></div>Не снизила цену по первому «дорого»</div>
-    </div>
-
-    <div class="check-section">
-      <div class="check-title" style="color:#4E7D42">✔ После — если купила</div>
-      <div class="check-item" onclick="toggleCheck(this)"><div class="checkmark"></div>Слот зафиксирован (дата + время + наставница)</div>
-      <div class="check-item" onclick="toggleCheck(this)"><div class="checkmark"></div>Подтверждение отправлено в Телеграм</div>
-      <div class="check-item" onclick="toggleCheck(this)"><div class="checkmark"></div>В CRM: что сказала / возражение / следующий шаг</div>
-      <div class="check-item" onclick="toggleCheck(this)"><div class="checkmark"></div>Ссылка на оплату выставлена (действует до 12:00 ночи)</div>
-    </div>
-
-    <div class="check-section">
-      <div class="check-title" style="color:#B8735A">⏳ После — если «подумаю»</div>
-      <div class="check-item" onclick="toggleCheck(this)"><div class="checkmark"></div>Зафиксирована конкретная дата возврата</div>
-      <div class="check-item" onclick="toggleCheck(this)"><div class="checkmark"></div>Отправлено саммари / видео о продукте</div>
-      <div class="check-item" onclick="toggleCheck(this)"><div class="checkmark"></div>Дата касания ≤ 24 часа после звонка</div>
-      <div class="check-item" onclick="toggleCheck(this)"><div class="checkmark"></div>В CRM создана задача на перезвон</div>
-      <div class="check-item" onclick="toggleCheck(this)"><div class="checkmark"></div>Записана причина «подумаю» (цена / время / формат)</div>
-    </div>
-
-  </div>
-
-  <div style="margin-top:16px;background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:18px;">
-    <div style="font-size:12px;font-weight:700;color:#B8963A;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">🌿 3-часовое правило после пробного</div>
-    <div style="font-size:13.5px;line-height:1.7;color:var(--text)">
-      Звоню <b>не позже 3 часов</b> после пробного занятия. Через 24 часа конверсия падает в 2 раза.<br><br>
-      После пробного — 3 вопроса:<br>
-      <span style="color:#6B8F5E;font-weight:700">①</span> Что зашло? Что сейчас запомнилось?<br>
-      <span style="color:#B8735A;font-weight:700">②</span> Чего не хватило? Что хотелось бы добавить?<br>
-      <span style="color:#4E7D42;font-weight:700">③</span> Попадает ли в запрос? Это про регулярную практику, о которой говорила?
-    </div>
-  </div>
-
-  <button onclick="resetChecklist()" style="margin-top:14px;background:#FFFFFF;border:1.5px solid var(--border);color:var(--text);padding:10px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;box-shadow:var(--shadow);">
-    🔄 Сбросить чек-лист для нового звонка
-  </button>
-</div>
-
-</div><!-- /main -->
-
-<div class="scroll-top" id="scrollTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</div>
-
+<!-- ====== JS ====== -->
 <script>
-  function showPage(name) {
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.getElementById('page-' + name).classList.add('active');
-    document.getElementById('tab-' + name).classList.add('active');
-    window.scrollTo({top: 0, behavior: 'smooth'});
+// ============ DATA: OBJECTIONS ============
+const OBJECTIONS = [
+  {id:'time',cat:'time',label:'Время',q:'У меня сейчас нет времени',a:`Это самое частое, что я слышу.
+
+И смотрите: вы уже тратите 3–5 часов в неделю на попытки сесть на коврик, поиск видео и дорогу. YOGO — это всего 2 часа в неделю, но чётко в графике.
+
+В разговорах со студентками часто звучит: «когда сама занимаешься — можно пропустить. Когда тебя ждут — не так легко слиться».`,h:'→ Если бы у вас было два фиксированных часа — в какие дни удобно?'},
+  {id:'time-period',cat:'time',label:'Время',q:'Это именно сейчас или вообще?',a:`Уточните, пожалуйста — это период такой или вы вообще в таком ритме живёте? От этого зависит, что мне предложить.`,h:'Слушаем — определит, какой следующий вопрос задать.'},
+  {id:'time-burden',cat:'time',label:'Время',q:'Боюсь, что это будет ещё одна обязанность',a:`Очень понятное ощущение. Особенно когда обучение и так занимает много места в жизни.
+
+Поэтому здесь нет задачи «успевать идеально». Смысл в том, чтобы у вас было пространство, куда можно прийти и просто попрактиковать.`,h:'→ Что сейчас больше всего забирает у вас силы в обучении?'},
+  {id:'time-fall',cat:'time',label:'Время',q:'У меня практика выпадает',a:`Это очень частая история на обучении. И обычно именно в такие моменты помогает не жёсткая дисциплина, а пространство, которое мягко возвращает обратно в практику.`,h:'→ Чего сейчас больше всего не хватает, чтобы практика держалась регулярнее?'},
+  {id:'money-paid',cat:'money',label:'Дорого',q:'Я уже много заплатила за обучение',a:`Понимаю вас. Курс правда серьёзный, решение не копеечное.
+
+YOGO — не обязательная часть программы, а возможность для тех, кому хочется усилить именно практику и получать обратную связь. Кому-то это очень нужно сейчас, а кому-то достаточно основного обучения — и это нормально.`,h:'→ Если не про стоимость, а именно про пользу — что для вас делало бы такой формат действительно ценным?'},
+  {id:'money',cat:'money',label:'Дорого',q:'Дорого',a:`Понимаю. Давайте посмотрим иначе: 8 000 ₽ за месяц — это 1 000 ₽ за живое занятие в небольшой группе с преподавателем, который ведёт ваш учебный трек.
+
+В студиях такой формат — 1 500–2 500 ₽ за урок, и преподаватель там не знает ни вашего модуля, ни экзамена. Индивидуальные — 3–5 тысяч за час.`,h:'→ Если абстрагироваться от цены — сам продукт для вас ценный?'},
+  {id:'money-discount',cat:'money',label:'Дорого',q:'А можно дешевле / есть скидка?',a:`Скидок нет, и это принципиально. Низкая цена в этом формате означает большую группу или менее опытного преподавателя — мы оба варианта не рассматриваем.
+
+Здесь — 1 000 ₽ за урок и преподаватель, который знает ваш трек.`,h:'→ Если оставить цену в стороне — сам формат вам подходит?'},
+  {id:'think',cat:'think',label:'Подумаю',q:'Мне нужно подумать',a:`Конечно. А можно уточню — вы сейчас больше сомневаетесь, нужно ли это вообще… или скорее боитесь, что снова не найдёте на себя время?`,h:'→ Что вам сейчас ближе?'},
+  {id:'think-write',cat:'think',label:'Подумаю',q:'Я подумаю и напишу сама',a:`Понимаю. По опыту — «подумаю и напишу» обычно тонет в делах, и через неделю мы оба забываем, о чём говорили.
+
+Давайте проще: я наберу [конкретный день] в [конкретное время]. Если решите, что не подходит — скажете «нет». Так проще, чем держать это в голове.`,h:'→ Удобно [день] в [время]?'},
+  {id:'online',cat:'online',label:'Онлайн',q:'Я не люблю онлайн',a:`Понимаю. А что именно в онлайне не откликается? Чаще всего люди говорят либо про атмосферу, либо про ощущение, что их не видят.
+
+Поэтому мы делаем небольшие группы до 8 человек с включёнными камерами и обратной связью. Преподаватель видит, как вы стоите в позе, и правит лично, по имени.`,h:'→ Какой формат практики обычно ближе?'},
+  {id:'online-studio',cat:'online',label:'Онлайн',q:'В студии живая энергия, а онлайн — не то',a:`Согласна, живой коврик ничем не заменишь. И при этом онлайн в маленькой группе — компромисс, который выигрывает у самостоятельной практики дома.
+
+Не нужно ехать, не нужно собираться. Сел на коврик, открыл камеру — практика началась.`,h:'→ Если бы можно было сохранить ощущение «меня видят» в онлайне — этот формат был бы рабочим?'},
+  {id:'studio',cat:'other',label:'Студия',q:'Я уже хожу в студию (Павлова / Оз / другая)',a:`Это здорово — значит практика уже есть.
+
+YOGO — не замена. Это своё. Группа только из студенток Тичерса, занятие заточено под ваш модуль, преподаватель знает учебный трек и экзамен. Такого формата нигде больше нет.
+
+По сути — один раз прийти на пробное, прожить изнутри, и сами решите: подходит как дополнение или вообще не ваше.`,h:'→ Как вам такой вариант?'},
+  {id:'individual',cat:'other',label:'Индивидуально',q:'У меня есть индивидуальный преподаватель',a:`Отлично. Это, кстати, самый дорогой формат — обычно 3–5 тысяч за час.
+
+YOGO про другое. Здесь — небольшая группа из тех, кто проходит то же самое, что и вы. Видишь чужие ошибки и учишься. Один на один это не работает.`,h:'→ Если бы можно было сохранить индивидуала и добавить группу — было бы интересно попробовать пробное?'},
+  {id:'teachers',cat:'teachers',label:'Хватает курса',q:'Мне хватает курса',a:`Да, курс действительно даёт очень много — мы и задумывали его таким.
+
+Здесь немного другой запрос — не про знания, а про регулярную практику и обратную связь. Одно дело посмотреть и понять материал, другое — спокойно практиковать и понимать, что вы двигаетесь в правильном направлении.`,h:'→ А как у вас сейчас в целом с ощущением уверенности в собственной практике?'},
+  {id:'self',cat:'teachers',label:'Сама',q:'Я и так практикую сама',a:`Это ценно, что у вас уже есть своя практика.
+
+YOGO может быть полезен как возможность получать внешний взгляд и точечные корректировки, которые сложно увидеть самостоятельно. В записях вы себя не видите — а в группе видите свои ошибки через чужие.`,h:'→ Бывают моменты, где всё-таки хочется обратной связи со стороны?'},
+  {id:'know',cat:'teachers',label:'Знаю',q:'Я и так знаю этот материал',a:`Отлично — значит база есть.
+
+YOGO — это не теория, это живая практика прямо по темам вашего модуля. Именно для того, чтобы знание из головы перешло в тело.`,h:'→ Какие темы сейчас остаются на уровне головы, а в теле ещё не закрепились?'},
+  {id:'why',cat:'teachers',label:'Зачем',q:'Не понимаю, зачем мне ещё одна практика',a:`Смысл не в количестве занятий. Скорее в том, чтобы практика была более осознанной и поддерживающей, особенно во время обучения.`,h:'→ Чего сейчас больше всего хочется от своей практики?'},
+  {id:'product',cat:'product',label:'Что это',q:'А это потом платно? Что продаёте?',a:`Пробное — полностью бесплатно. Без обязательств. После него у вас будет возможность вступить в YOGO на постоянной основе — это платная подписка.
+
+Но на пробном никто ничего не продаёт. Просто практикуете, смотрите, откликается ли формат, и сами решаете.`,h:'→ Кстати, вы сейчас где-то ещё практикуете, кроме Тичерса?'},
+  {id:'price',cat:'product',label:'Цена',q:'Сколько стоит?',a:`8 000 ₽ в месяц — это 8 живых занятий с преподавателем в небольшой группе. 1 000 ₽ за урок.`,h:'→ Сначала прийти на пробное — попробовать формат, а потом уже думать про подписку?'},
+  {id:'exam',cat:'exam',label:'Экзамен',q:'Мне страшно перед экзаменом',a:`Я понимаю это волнение.
+
+Преподаватели YOGO — это лучшие выпускники Академии йоги. Они шли тем же путём, что сейчас идёте вы, 2–3–5 лет назад, и блестяще показали себя на обучении.
+
+Это люди, которые изнутри знают, с чем вы сейчас сталкиваетесь. И максимально заинтересованы в том, чтобы у вас получилось.`,h:'→ Что сейчас вызывает больше всего волнения в подготовке?'},
+  {id:'asana',cat:'exam',label:'Асана',q:'У меня не идёт чатуранга / ширшасана / пинча',a:`Вы назвали конкретную форму — это уже половина решения.
+
+У нас есть тематические недели ровно под эти асаны. Преподаватель правит прямо в моменте, не на записи.`,h:'→ Хотите попасть на пробное в неделю, посвящённую этой асане?'},
+  {id:'mistake',cat:'exam',label:'Ошибки',q:'Я боюсь делать что-то неправильно',a:`Это одна из главных причин, почему студентки приходят в YOGO. Самостоятельно действительно сложно увидеть свои ошибки. А когда есть преподаватель и обратная связь — становится намного спокойнее.`,h:'→ Есть конкретные асаны, где особенно не хватает уверенности?'},
+  {id:'show',cat:'emo',label:'Проявление',q:'Мне сложно проявляться',a:`Это очень частая история. И как раз поэтому в Академии мы стараемся создавать максимально безопасную среду — где можно пробовать, ошибаться и учиться без давления.
+
+В YOGO от вас не ждут какого-то результата или идеальности. Туда можно прийти просто чтобы спокойно побыть в процессе.`,h:'→ Что сейчас вызывает больше всего напряжения в проявленности?'},
+  {id:'comfort',cat:'emo',label:'Зона комфорта',q:'Мне сложно выйти из зоны комфорта',a:`И не нужно сейчас делать это через силу. Такие форматы как раз помогают мягко привыкать к практике и взаимодействию с людьми без ощущения, что вас оценивают. Обычно после нескольких занятий становится сильно спокойнее.`,h:'→ Если бы можно было просто прийти и спокойно посмотреть без ожиданий — было бы так комфортнее?'},
+  {id:'safe',cat:'emo',label:'Безопасность',q:'Мне важно, чтобы было спокойно и без давления',a:`Это одна из главных идей YOGO. Чтобы практика была не про стресс и «надо», а про поддержку, уверенность и ощущение, что вы не одна в этом процессе.`,h:'→ Что для вас лично создаёт ощущение безопасного пространства?'},
+  {id:'not-sure',cat:'ready',label:'Не уверена',q:'Я не уверена, что мне это нужно',a:`Это нормально. Чаще всего интерес появляется в момент, когда хочется больше уверенности в практике, регулярности или обратной связи.
+
+Здесь можно спокойно сначала посмотреть формат и понять, насколько он откликается.`,h:'→ Что для вас было бы главным показателем, что такой формат действительно полезен?'},
+  {id:'no-commit',cat:'ready',label:'Обязательства',q:'Я не хочу брать на себя обязательства',a:`И не нужно. Здесь нет задачи «вписаться в идеальный режим». Можно просто попробовать формат, почувствовать, подходит ли, и уже потом спокойно решить.`,h:'→ Вам обычно комфортнее сначала посмотреть и почувствовать формат, прежде чем принимать решение?'},
+  {id:'just-look',cat:'ready',label:'Посмотреть',q:'Я просто хочу посмотреть',a:`Это хороший вариант. Пробное занятие — не экзамен и не проверка. Это возможность спокойно познакомиться с форматом и понять свои ощущения.`,h:'→ Что было бы важно почувствовать на пробном, чтобы понять — формат подходит?'},
+  {id:'irrelevant',cat:'ready',label:'Неактуально',q:'Мне сейчас не актуально',a:`Понимаю. Иногда правда не тот период и не тот ресурс. Если позже почувствуете, что хочется больше практики — можно будет спокойно вернуться к этому вопросу.`,h:'→ В какой момент такой формат мог бы стать актуальным?'},
+  {id:'not-decided',cat:'ready',label:'Не решила',q:'Я пока не готова решать',a:`Не обязательно принимать решение сразу. Можно просто познакомиться с форматом и посмотреть, насколько он подходит.`,h:'→ Если без обязательств и ожиданий — было бы интересно хотя бы попробовать пробное?'},
+];
+
+// ============ SECTION GOALS ============
+const SECTION_GOALS = {
+  logic: { hide:false, text:'Прочитайте «Главную логику» перед первым звонком — это компас для всего разговора.' },
+  invitation: { hide:true },
+  noshow: { hide:false, text:'Перезаписать на ближайший слот ИЛИ зафиксировать настоящую причину для повторного касания.' },
+  sale: { hide:false, text:'Услышать ощущения, определить когорту, провести через презентацию к оплате.' },
+  objections: { hide:false, text:'Снять возражение и вернуть разговор клиентке уточняющим вопросом.' },
+  meanings: { hide:false, text:'Прочитать перед сменой. Возвращаться, если разговор «уплывает».' },
+};
+
+// ============ TABS ============
+const tabs = document.querySelectorAll('.tab');
+const panels = document.querySelectorAll('.panel');
+function switchTab(name) {
+  tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  panels.forEach(p => p.classList.toggle('active', p.dataset.section === name));
+  // update sidebar goal
+  const cfg = SECTION_GOALS[name];
+  const goalCard = document.getElementById('goal-card');
+  if (cfg.hide) {
+    goalCard.style.display = 'none';
+  } else {
+    goalCard.style.display = '';
+    document.getElementById('r-goal').textContent = cfg.text;
   }
-  function toggleStep(el) { el.classList.toggle('expanded'); }
-  function togglePain(el) { el.classList.toggle('open'); }
-  function toggleObj(el) { el.classList.toggle('open'); }
-  function toggleCheck(el) { el.classList.toggle('checked'); }
-  function resetChecklist() {
-    document.querySelectorAll('.check-item').forEach(el => el.classList.remove('checked'));
-  }
-  window.addEventListener('scroll', () => {
-    const btn = document.getElementById('scrollTop');
-    if (window.scrollY > 300) btn.classList.add('visible');
-    else btn.classList.remove('visible');
+  window.scrollTo({ top:0, behavior:'smooth' });
+}
+tabs.forEach(t => t.addEventListener('click', () => switchTab(t.dataset.tab)));
+document.querySelectorAll('[data-go]').forEach(el => el.addEventListener('click', () => switchTab(el.dataset.go)));
+
+// Quick pills (top right)
+document.querySelectorAll('[data-jump]').forEach(b => {
+  b.addEventListener('click', () => {
+    const target = b.dataset.jump;
+    if (target === 'logic') {
+      switchTab('logic');
+    } else if (target === 'forbidden' || target === 'meanings') {
+      switchTab('meanings');
+      setTimeout(() => {
+        const el = document.getElementById(target === 'forbidden' ? 'forbidden' : 'meanings-anchor');
+        if (el) el.scrollIntoView({ behavior:'smooth', block:'start' });
+      }, 100);
+    }
   });
+});
+
+// ============ BRANCHES ============
+document.querySelectorAll('.branch-btn[data-branch]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const id = btn.dataset.branch;
+    const target = document.getElementById(id);
+    if (!target) return;
+    const card = btn.closest('.step');
+    const wasOpen = target.classList.contains('open');
+    if (card) {
+      card.querySelectorAll('.branch-content').forEach(c => c.classList.remove('open'));
+      card.querySelectorAll('.branch-btn').forEach(b => b.classList.remove('active'));
+    }
+    if (!wasOpen) {
+      target.classList.add('open');
+      btn.classList.add('active');
+    }
+  });
+});
+
+// ============ COPY ============
+function bindCopy(btn) {
+  btn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const text = btn.dataset.copy || btn.dataset.text || '';
+    if (!text) return;
+    try { await navigator.clipboard.writeText(text); }
+    catch {
+      const ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+    }
+    btn.classList.add('copied');
+    const orig = btn.innerHTML;
+    btn.innerHTML = '✓ Скопировано';
+    showToast('Фраза скопирована');
+    setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = orig; }, 1600);
+  });
+}
+document.querySelectorAll('.copy[data-copy]').forEach(bindCopy);
+
+function showToast(m) {
+  const t = document.getElementById('toast');
+  t.textContent = m; t.classList.add('show');
+  clearTimeout(window._tt); window._tt = setTimeout(() => t.classList.remove('show'), 1700);
+}
+
+// ============ OBJECTIONS RENDER ============
+const list = document.getElementById('objections-list');
+function renderObjs(cat = 'all') {
+  const items = cat === 'all' ? OBJECTIONS : OBJECTIONS.filter(o => o.cat === cat);
+  list.innerHTML = items.map(o => `
+    <div class="obj-card" data-id="${o.id}" data-cat="${o.cat}">
+      <button class="obj-toggle" aria-expanded="false">
+        <span class="obj-q">${o.q}</span>
+        <span class="obj-cat">${o.label}</span>
+        <svg class="obj-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="obj-body">
+        <div class="block obj">
+          <div class="block-head">
+            <span class="badge">Возражение → ответ</span>
+            <button class="copy" data-copy="${(o.a + '\n\n' + o.h).replace(/"/g,'&quot;').replace(/\n/g,'&#10;')}">Копировать</button>
+          </div>
+          <div class="body">${o.a.replace(/\n/g,'<br>')}<br><br><b>${o.h}</b></div>
+        </div>
+        <div class="block listen">
+          <div class="block-head"><span class="badge">Главное</span></div>
+          <div class="body">Цель ответа — не «закрыть» возражение, а вернуть разговор клиентке. Финальный вопрос обязателен.</div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+  list.querySelectorAll('.obj-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const ex = btn.getAttribute('aria-expanded') === 'true';
+      btn.setAttribute('aria-expanded', !ex);
+      btn.nextElementSibling.classList.toggle('open');
+    });
+  });
+  list.querySelectorAll('.copy[data-copy]').forEach(bindCopy);
+}
+renderObjs('all');
+
+document.getElementById('obj-filter').addEventListener('click', e => {
+  if (!e.target.classList.contains('tag')) return;
+  document.querySelectorAll('#obj-filter .tag').forEach(b => b.classList.remove('active'));
+  e.target.classList.add('active');
+  renderObjs(e.target.dataset.cat);
+});
+
+function goObjection(id) {
+  switchTab('objections');
+  setTimeout(() => {
+    document.querySelectorAll('#obj-filter .tag').forEach(x => x.classList.remove('active'));
+    document.querySelector('#obj-filter .tag[data-cat="all"]').classList.add('active');
+    renderObjs('all');
+    setTimeout(() => {
+      const card = document.querySelector(`.obj-card[data-id="${id}"]`);
+      if (card) {
+        card.scrollIntoView({ behavior:'smooth', block:'center' });
+        const tg = card.querySelector('.obj-toggle');
+        if (tg && tg.getAttribute('aria-expanded') !== 'true') tg.click();
+        card.style.boxShadow = '0 0 0 3px rgba(37,99,235,.25), var(--shadow)';
+        setTimeout(() => card.style.boxShadow = '', 1800);
+      }
+    }, 50);
+  }, 150);
+}
+
+// ============ COHORT ============
+function pickCohort(n) {
+  document.querySelectorAll('.cohort-card').forEach(c => {
+    c.classList.toggle('selected', c.dataset.cohort == String(n));
+  });
+  document.querySelectorAll('.cohort-block').forEach(b => {
+    b.classList.toggle('show', b.dataset.for == String(n));
+  });
+  const hint = document.getElementById('cohort-hint');
+  if (hint) hint.style.display = 'none';
+  try { localStorage.setItem('yogo-book-cohort', String(n)); } catch {}
+}
+document.querySelectorAll('[data-cohort-pick]').forEach(b => {
+  b.addEventListener('click', () => pickCohort(+b.dataset.cohortPick));
+});
+try {
+  const saved = localStorage.getItem('yogo-book-cohort');
+  if (saved) pickCohort(+saved);
+} catch {}
+
+// mirror tool removed
+
+// ============ SMART NOTES ============
+const NOTES_KEY = 'yogo-book-notes';
+const NOTES_TTL = 10 * 60 * 60 * 1000;
+
+const noteInput = document.getElementById('note-input');
+const notesSearch = document.getElementById('notes-search');
+const notesList = document.getElementById('notes-list');
+const notesCount = document.getElementById('notes-count');
+const notesClearAll = document.getElementById('notes-clear-all');
+
+let notesData = [];
+function loadNotes() {
+  try {
+    const raw = localStorage.getItem(NOTES_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    const now = Date.now();
+    return arr.filter(n => n && n.createdAt && (now - n.createdAt) < NOTES_TTL);
+  } catch { return []; }
+}
+function saveNotes() {
+  try { localStorage.setItem(NOTES_KEY, JSON.stringify(notesData)); } catch {}
+}
+function parseNoteText(raw) {
+  const text = raw.trim();
+  if (!text) return null;
+  const m = text.match(/^([^\n—–:,(]{1,60}?)\s*[—–:,(]\s*([\s\S]+)$/);
+  if (m) return { name:m[1].trim(), text:m[2].trim() };
+  const words = text.split(/\s+/);
+  if (words.length >= 4) return { name:words.slice(0,2).join(' '), text:words.slice(2).join(' ') };
+  return { name:'', text };
+}
+function fmtTime(ts) {
+  const d = new Date(ts), now = new Date();
+  const diffMin = Math.floor((now - d) / 60000);
+  if (diffMin < 1) return 'только что';
+  if (diffMin < 60) return diffMin + ' мин назад';
+  const sameDay = d.toDateString() === now.toDateString();
+  const hh = String(d.getHours()).padStart(2,'0');
+  const mm = String(d.getMinutes()).padStart(2,'0');
+  return (sameDay ? '' : 'вчера ') + hh + ':' + mm;
+}
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function highlightText(s, q) {
+  if (!q) return escapeHtml(s);
+  const safe = escapeHtml(s);
+  const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + ')', 'gi');
+  return safe.replace(re, '<mark class="note-hl">$1</mark>');
+}
+function renderNotes() {
+  const q = (notesSearch.value || '').trim().toLowerCase();
+  const filtered = q
+    ? notesData.filter(n => (n.name + ' ' + n.text).toLowerCase().includes(q))
+    : notesData.slice();
+  filtered.sort((a,b) => b.createdAt - a.createdAt);
+  notesCount.textContent = notesData.length;
+  if (filtered.length === 0) {
+    notesList.innerHTML = '<div class="notes-empty">' +
+      (notesData.length === 0 ? 'Заметок пока нет' : 'Ничего не найдено') + '</div>';
+    return;
+  }
+  notesList.innerHTML = filtered.map(n => {
+    const nameHtml = n.name
+      ? `<span class="note-name">${highlightText(n.name, q)}</span>`
+      : `<span class="note-name empty">без имени</span>`;
+    const textHtml = n.text ? `<div class="note-text">${highlightText(n.text, q)}</div>` : '';
+    return `<div class="note-card" data-id="${n.id}">
+      <button class="note-del" title="Удалить" aria-label="Удалить заметку">&times;</button>
+      <div class="note-head">${nameHtml}<span class="note-time">${fmtTime(n.createdAt)}</span></div>
+      ${textHtml}
+    </div>`;
+  }).join('');
+  notesList.querySelectorAll('.note-del').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = +btn.parentElement.dataset.id;
+      notesData = notesData.filter(n => n.id !== id);
+      saveNotes(); renderNotes();
+    });
+  });
+}
+function addNote(raw) {
+  const parsed = parseNoteText(raw);
+  if (!parsed) return;
+  notesData.unshift({
+    id: Date.now() * 1000 + Math.floor(Math.random() * 1000),
+    name: parsed.name, text: parsed.text, createdAt: Date.now()
+  });
+  saveNotes(); renderNotes();
+}
+noteInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    if (noteInput.value.trim()) {
+      addNote(noteInput.value);
+      noteInput.value = '';
+      noteInput.style.borderColor = 'var(--green)';
+      setTimeout(() => { noteInput.style.borderColor = ''; }, 350);
+    }
+  } else if (e.key === 'Escape') {
+    noteInput.value = ''; noteInput.blur();
+  }
+});
+notesSearch.addEventListener('input', renderNotes);
+notesSearch.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { notesSearch.value=''; renderNotes(); notesSearch.blur(); }
+});
+notesClearAll.addEventListener('click', () => {
+  if (notesData.length === 0) return;
+  if (confirm('Удалить все заметки? (' + notesData.length + ' шт.)')) {
+    notesData = []; saveNotes(); renderNotes();
+  }
+});
+setInterval(() => {
+  const before = notesData.length;
+  notesData = loadNotes();
+  if (before !== notesData.length || notesData.length > 0) renderNotes();
+}, 60000);
+
+notesData = loadNotes();
+saveNotes();
+renderNotes();
 </script>
 </body>
 </html>
